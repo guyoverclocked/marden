@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "Marden",
+    "slug": "marden",
+    "version": "1.0.0",
+    "runtimeVersion": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "scheme": "marden",
+    "description": "Save AI answers, brainstorms, notes, and Markdown—then read them beautifully.",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.marden.reader",
+      "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "app.marden.reader",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#315C4A",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": true
+    },
+    "web": {
+      "name": "Marden",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#F5F3ED",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#141816"
+          }
+        }
+      ],
+      "expo-status-bar"
+    ],
+    "extra": {
+      "privacy": "Files and library metadata stay on the device."
+    }
+  }
+}
