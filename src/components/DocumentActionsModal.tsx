@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { FolderInput, Star, Trash2, X } from 'lucide-react-native';
+import { FilePenLine, FolderInput, Pencil, Star, Trash2, X } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, fonts, radii } from '../theme';
@@ -9,6 +9,8 @@ import { MarkdownDocument } from '../types';
 type DocumentActionsModalProps = {
   document: MarkdownDocument | null;
   onClose: () => void;
+  onEdit: () => void;
+  onRename: () => void;
   onMove: () => void;
   onToggleFavorite: () => void;
   onDelete: () => void;
@@ -17,6 +19,8 @@ type DocumentActionsModalProps = {
 export function DocumentActionsModal({
   document,
   onClose,
+  onEdit,
+  onRename,
   onMove,
   onToggleFavorite,
   onDelete,
@@ -36,6 +40,18 @@ export function DocumentActionsModal({
               <X size={18} color={colors.ink} />
             </Pressable>
           </View>
+          <Action
+            icon={<FilePenLine size={19} color={colors.moss} />}
+            title="Edit Markdown"
+            description="Update the title, content, or project"
+            onPress={onEdit}
+          />
+          <Action
+            icon={<Pencil size={19} color={colors.moss} />}
+            title="Rename file"
+            description="Change how this document appears in your library"
+            onPress={onRename}
+          />
           <Action
             icon={<FolderInput size={19} color={colors.moss} />}
             title="Move to project"

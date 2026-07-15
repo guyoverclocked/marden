@@ -28,6 +28,8 @@ cd "$ROOT_DIR"
 npx expo prebuild --platform android --no-install
 ./android/gradlew -p android assembleRelease
 
+APP_VERSION="$(node -p "require('./app.json').expo.version")"
+APK_PATH="artifacts/Marden-${APP_VERSION}.apk"
 mkdir -p artifacts
-cp android/app/build/outputs/apk/release/app-release.apk artifacts/Marden-1.0.0.apk
-shasum -a 256 artifacts/Marden-1.0.0.apk
+cp android/app/build/outputs/apk/release/app-release.apk "$APK_PATH"
+shasum -a 256 "$APK_PATH"

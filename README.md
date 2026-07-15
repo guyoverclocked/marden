@@ -65,7 +65,7 @@ Marden is useful for saving:
 
 The fastest route is the installable test APK on the [latest GitHub Release](https://github.com/guyoverclocked/marden/releases/latest).
 
-1. Download `Marden-1.0.0.apk` on your Android phone.
+1. Download `Marden-1.0.1.apk` on your Android phone.
 2. Open the downloaded file.
 3. If Android asks, allow installs from that browser or file manager.
 4. Tap **Install**, then open Marden.
@@ -128,7 +128,7 @@ For a credential-free local test APK on macOS with Java 17 and Android SDK 36 in
 npm run build:apk:local
 ```
 
-The local script copies the result to `artifacts/Marden-1.0.0.apk`. Production Android and iOS builds are available through `npm run build:android` and `npm run build:ios`.
+The local script names the result from the app version—for this release, `artifacts/Marden-1.0.1.apk`. Production Android and iOS builds are available through `npm run build:android` and `npm run build:ios`.
 
 ## Contributing
 

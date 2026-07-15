@@ -29,29 +29,33 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { colors, fonts, radii, shadow } from '../theme';
-import { Project } from '../types';
+import { MarkdownDocument, Project } from '../types';
 import { titleFromMarkdown, wordCount } from '../utils/markdown';
 
 type EditorScreenProps = {
   projects: Project[];
+  document?: MarkdownDocument | null;
   onCancel: () => void;
-  onSave: (title: string, content: string, projectId: string | null) => void;
+  onSave: (title: string, content: string, projectId: string | null) => boolean;
 };
 
 type EditorMode = 'edit' | 'preview';
 
-export function EditorScreen({ projects, onCancel, onSave }: EditorScreenProps) {
+export function EditorScreen({ projects, document, onCancel, onSave }: EditorScreenProps) {
   const editorRef = useRef<TextInput>(null);
   const [mode, setMode] = useState<EditorMode>('edit');
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [projectId, setProjectId] = useState<string | null>(null);
+  const [title, setTitle] = useState(document?.title || '');
+  const [content, setContent] = useState(document?.content || '');
+  const [projectId, setProjectId] = useState<string | null>(document?.projectId || null);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const [selection, setSelection] = useState({ start: 0, end: 0 });
   const selectedProject = projects.find((project) => project.id === projectId);
   const count = useMemo(() => wordCount(content), [content]);
   const canSave = content.trim().length > 0;
+  const isDirty = document
+    ? title !== document.title || content !== document.content || projectId !== document.projectId
+    : Boolean(content.trim() || title.trim());
 
   const insert = (before: string, after: string, placeholder: string) => {
     const selected = content.slice(selection.start, selection.end);
@@ -77,12 +81,13 @@ export function EditorScreen({ projects, onCancel, onSave }: EditorScreenProps) 
   const save = () => {
     if (!canSave) return;
     const resolvedTitle = title.trim() || titleFromMarkdown(content, 'Untitled.md');
-    onSave(resolvedTitle, content, projectId);
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (onSave(resolvedTitle, content, projectId)) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
   };
 
   const requestCancel = () => {
-    if (!content.trim() && !title.trim()) {
+    if (!isDirty) {
       onCancel();
       return;
     }
@@ -107,8 +112,8 @@ export function EditorScreen({ projects, onCancel, onSave }: EditorScreenProps) 
             <Text style={styles.cancelText}>Cancel</Text>
           </Pressable>
           <View style={styles.headerCenter}>
-            <Text style={styles.headerEyebrow}>NEW MARKDOWN</Text>
-            <Text style={styles.headerTitle}>Write in Marden</Text>
+            <Text style={styles.headerEyebrow}>{document ? 'EDIT MARKDOWN' : 'NEW MARKDOWN'}</Text>
+            <Text style={styles.headerTitle}>{document ? 'Edit in Marden' : 'Write in Marden'}</Text>
           </View>
           <Pressable
             accessibilityRole="button"
@@ -158,6 +163,7 @@ export function EditorScreen({ projects, onCancel, onSave }: EditorScreenProps) 
               <TextInput
                 value={title}
                 onChangeText={setTitle}
+                accessibilityLabel="Document title"
                 placeholder="Document title (optional)"
                 placeholderTextColor={colors.inkFaint}
                 selectionColor={colors.moss}
@@ -261,8 +267,8 @@ export function EditorScreen({ projects, onCancel, onSave }: EditorScreenProps) 
             <View style={styles.discardIcon}>
               <X size={22} color={colors.error} />
             </View>
-            <Text style={styles.discardTitle}>Discard this draft?</Text>
-            <Text style={styles.discardBody}>Your unsaved Markdown will be lost.</Text>
+            <Text style={styles.discardTitle}>{document ? 'Discard your changes?' : 'Discard this draft?'}</Text>
+            <Text style={styles.discardBody}>{document ? 'The saved document will stay unchanged.' : 'Your unsaved Markdown will be lost.'}</Text>
             <View style={styles.discardActions}>
               <Pressable
                 accessibilityRole="button"

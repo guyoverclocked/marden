@@ -2,6 +2,14 @@ import { Heading, MarkdownDocument } from '../types';
 
 export const stripExtension = (fileName: string) => fileName.replace(/\.(md|markdown|mdown|mkd)$/i, '');
 
+export const safeDocumentName = (value: string) =>
+  stripExtension(value)
+    .replace(/[\\/:*?"<>|]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim() || 'Untitled';
+
+export const markdownFileName = (value: string) => `${safeDocumentName(value)}.md`;
+
 export const titleFromMarkdown = (content: string, fileName: string) => {
   const firstHeading = content.match(/^#\s+(.+)$/m)?.[1]?.trim();
   return firstHeading || stripExtension(fileName).replace(/[-_]+/g, ' ').trim() || 'Untitled note';
@@ -53,11 +61,12 @@ export const createDocument = (
   fileName: string,
   content: string,
   projectId: string | null = null,
+  explicitTitle?: string,
 ): MarkdownDocument => {
   const now = Date.now();
   return {
     id: `${now}-${Math.random().toString(36).slice(2, 9)}`,
-    title: titleFromMarkdown(content, fileName),
+    title: explicitTitle?.trim() || titleFromMarkdown(content, fileName),
     fileName,
     content,
     createdAt: now,

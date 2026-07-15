@@ -75,14 +75,16 @@ export function LibraryScreen({
       })
       .filter((document) => {
         if (!normalized) return true;
+        const projectName = projects.find((project) => project.id === document.projectId)?.name || '';
         return (
           document.title.toLowerCase().includes(normalized) ||
           document.fileName.toLowerCase().includes(normalized) ||
+          projectName.toLowerCase().includes(normalized) ||
           document.content.toLowerCase().includes(normalized)
         );
       })
       .sort((a, b) => b.lastOpenedAt - a.lastOpenedAt);
-  }, [documents, filter, projectFilter, query]);
+  }, [documents, filter, projectFilter, projects, query]);
 
   const closeSearch = () => {
     setQuery('');
@@ -137,12 +139,17 @@ export function LibraryScreen({
               autoFocus
               value={query}
               onChangeText={setQuery}
-              placeholder="Search titles and text"
+              placeholder="Search files, projects and text"
               placeholderTextColor={colors.inkFaint}
               selectionColor={colors.moss}
               style={styles.searchInput}
             />
-            <Pressable hitSlop={10} onPress={closeSearch}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close search"
+              hitSlop={10}
+              onPress={closeSearch}
+            >
               <X size={18} color={colors.inkSoft} />
             </Pressable>
           </View>
@@ -236,7 +243,9 @@ export function LibraryScreen({
 
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.eyebrow}>YOUR LIBRARY</Text>
+            <Text style={styles.eyebrow}>
+              {query ? `${visibleDocuments.length} ${visibleDocuments.length === 1 ? 'MATCH' : 'MATCHES'}` : 'YOUR LIBRARY'}
+            </Text>
             <Text style={styles.sectionTitle}>{query ? 'Search results' : activeProjectName}</Text>
           </View>
           <View style={styles.filters}>

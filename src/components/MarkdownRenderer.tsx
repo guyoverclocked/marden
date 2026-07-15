@@ -4,6 +4,7 @@ import Markdown, { MarkdownIt } from 'react-native-markdown-display';
 
 import { colors, fonts, radii } from '../theme';
 import { TextScale } from '../types';
+import { CodeBlock } from './CodeBlock';
 import { MermaidDiagram } from './MermaidDiagram';
 
 type MarkdownRendererProps = {
@@ -186,24 +187,18 @@ export function MarkdownRenderer({ content, textScale, darkMode = false }: Markd
   const rules = useMemo(
     () => ({
       fence: (node: { key: string; content: string; sourceInfo?: string }) => {
-        const language = (node.sourceInfo || '').trim().toLowerCase();
+        // Markdown-It allows optional metadata after the language. Only the
+        // first token identifies the language (for example: ts title="app.ts").
+        const language = (node.sourceInfo || '').trim().split(/\s+/)[0]?.toLowerCase() || '';
         if (language === 'mermaid') {
           return <MermaidDiagram key={node.key} source={node.content} darkMode={darkMode} />;
         }
 
-        return (
-          <View key={node.key} style={[styles.codeShell, darkMode && styles.codeShellDark]}>
-            {language ? (
-              <View style={styles.codeHeader}>
-                <Text style={styles.codeLanguage}>{language.toUpperCase()}</Text>
-              </View>
-            ) : null}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <Text style={styles.codeText}>{node.content.replace(/\n$/, '')}</Text>
-            </ScrollView>
-          </View>
-        );
+        return <CodeBlock key={node.key} code={node.content} language={language} darkMode={darkMode} />;
       },
+      code_block: (node: { key: string; content: string }) => (
+        <CodeBlock key={node.key} code={node.content} darkMode={darkMode} />
+      ),
       table: (node: { key: string }, children: React.ReactNode) => (
         <View key={node.key} style={[styles.tableShell, darkMode && styles.tableShellDark]}>
           <View style={[styles.tableHint, darkMode && styles.tableHintDark]}>
@@ -302,38 +297,6 @@ export function MarkdownRenderer({ content, textScale, darkMode = false }: Markd
 }
 
 const styles = StyleSheet.create({
-  codeShell: {
-    width: '100%',
-    marginVertical: 16,
-    borderRadius: radii.md,
-    backgroundColor: '#202622',
-    overflow: 'hidden',
-  },
-  codeShellDark: {
-    backgroundColor: '#101512',
-    borderWidth: 1,
-    borderColor: '#303933',
-  },
-  codeHeader: {
-    height: 36,
-    justifyContent: 'center',
-    paddingHorizontal: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.09)',
-  },
-  codeLanguage: {
-    color: '#9DB2A5',
-    fontFamily: fonts.semibold,
-    fontSize: 8.5,
-    letterSpacing: 1.1,
-  },
-  codeText: {
-    padding: 17,
-    color: '#E7ECE8',
-    fontFamily: fonts.mono,
-    fontSize: 12.5,
-    lineHeight: 20,
-  },
   tableShell: {
     width: '100%',
     marginVertical: 18,

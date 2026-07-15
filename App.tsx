@@ -8,6 +8,8 @@ import { useFonts } from 'expo-font';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { DocumentActionsModal } from './src/components/DocumentActionsModal';
+import { DocumentDeleteModal } from './src/components/DocumentDeleteModal';
+import { DocumentRenameModal } from './src/components/DocumentRenameModal';
 import { ProjectAssignmentModal } from './src/components/ProjectAssignmentModal';
 import { EditorScreen } from './src/screens/EditorScreen';
 import { LibraryScreen } from './src/screens/LibraryScreen';
@@ -15,7 +17,7 @@ import { ReaderScreen } from './src/screens/ReaderScreen';
 import { loadLibrary, loadProjects, saveLibrary, saveProjects } from './src/storage/libraryStorage';
 import { colors } from './src/theme';
 import { MarkdownDocument, Project } from './src/types';
-import { createDocument } from './src/utils/markdown';
+import { createDocument, markdownFileName, safeDocumentName, wordCount } from './src/utils/markdown';
 
 const isMarkdownFile = (name: string, mimeType?: string) =>
   /\.(md|markdown|mdown|mkd)$/i.test(name) || mimeType === 'text/markdown';
@@ -33,7 +35,10 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [editingDocumentId, setEditingDocumentId] = useState<string | null>(null);
   const [actionDocumentId, setActionDocumentId] = useState<string | null>(null);
+  const [renamingDocumentId, setRenamingDocumentId] = useState<string | null>(null);
+  const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(null);
   const [movingDocumentId, setMovingDocumentId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isImporting, setIsImporting] = useState(false);
@@ -166,12 +171,73 @@ export default function App() {
     return project;
   };
 
+  const editingDocument = documents.find((document) => document.id === editingDocumentId) || null;
+
   const saveEditorDocument = (title: string, content: string, projectId: string | null) => {
-    const safeName = title.replace(/[\\/:*?"<>|]/g, '-').trim() || 'Untitled';
-    const document = createDocument(`${safeName}.md`, content, projectId);
-    setDocuments((current) => [document, ...current]);
+    const safeTitle = safeDocumentName(title);
+    const fileName = editingDocument && safeTitle === editingDocument.title
+      ? editingDocument.fileName
+      : markdownFileName(safeTitle);
+    const duplicate = documents.some(
+      (document) => document.id !== editingDocumentId && document.fileName.toLowerCase() === fileName.toLowerCase(),
+    );
+    if (duplicate) {
+      Alert.alert('That name is already used', 'Choose a different name so both Markdown files stay easy to find.');
+      return false;
+    }
+
+    if (editingDocument) {
+      const now = Date.now();
+      setDocuments((current) =>
+        current.map((document) =>
+          document.id === editingDocument.id
+            ? {
+                ...document,
+                title: safeTitle,
+                fileName,
+                content,
+                projectId,
+                wordCount: wordCount(content),
+                modifiedAt: now,
+                lastOpenedAt: now,
+              }
+            : document,
+        ),
+      );
+      setActiveDocumentId(editingDocument.id);
+    } else {
+      const document = createDocument(fileName, content, projectId, safeTitle);
+      setDocuments((current) => [document, ...current]);
+      setActiveDocumentId(document.id);
+    }
+
     setEditorOpen(false);
-    setActiveDocumentId(document.id);
+    setEditingDocumentId(null);
+    return true;
+  };
+
+  const closeEditor = () => {
+    setEditorOpen(false);
+    setEditingDocumentId(null);
+  };
+
+  const renameDocument = (documentId: string, nextName: string) => {
+    const title = safeDocumentName(nextName);
+    const fileName = markdownFileName(title);
+    const duplicate = documents.some(
+      (document) => document.id !== documentId && document.fileName.toLowerCase() === fileName.toLowerCase(),
+    );
+    if (duplicate) {
+      Alert.alert('That name is already used', 'Choose a different name so both Markdown files stay easy to find.');
+      return;
+    }
+    setDocuments((current) =>
+      current.map((document) =>
+        document.id === documentId ? { ...document, title, fileName, modifiedAt: Date.now() } : document,
+      ),
+    );
+    setRenamingDocumentId(null);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const showDocumentMenu = (document: MarkdownDocument) => {
@@ -194,7 +260,8 @@ export default function App() {
       {editorOpen ? (
         <EditorScreen
           projects={projects}
-          onCancel={() => setEditorOpen(false)}
+          document={editingDocument}
+          onCancel={closeEditor}
           onSave={saveEditorDocument}
         />
       ) : activeDocument ? (
@@ -217,7 +284,10 @@ export default function App() {
           isLoading={isLoading}
           isImporting={isImporting}
           onImport={importDocuments}
-          onCreateDocument={() => setEditorOpen(true)}
+          onCreateDocument={() => {
+            setEditingDocumentId(null);
+            setEditorOpen(true);
+          }}
           onCreateProject={createProject}
           onOpen={openDocument}
           onDocumentMenu={showDocumentMenu}
@@ -226,6 +296,16 @@ export default function App() {
       <DocumentActionsModal
         document={actionDocument}
         onClose={() => setActionDocumentId(null)}
+        onEdit={() => {
+          if (!actionDocument) return;
+          setEditingDocumentId(actionDocument.id);
+          setActionDocumentId(null);
+          setEditorOpen(true);
+        }}
+        onRename={() => {
+          setRenamingDocumentId(actionDocument?.id || null);
+          setActionDocumentId(null);
+        }}
         onMove={() => {
           setActionDocumentId(null);
           setMovingDocumentId(actionDocument?.id || null);
@@ -235,17 +315,24 @@ export default function App() {
           setActionDocumentId(null);
         }}
         onDelete={() => {
-          const target = actionDocument;
+          setDeletingDocumentId(actionDocument?.id || null);
           setActionDocumentId(null);
-          if (!target) return;
-          Alert.alert('Delete this file?', 'The copy kept inside Marden will be removed. The original file is unchanged.', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Delete',
-              style: 'destructive',
-              onPress: () => setDocuments((current) => current.filter((item) => item.id !== target.id)),
-            },
-          ]);
+        }}
+      />
+      <DocumentDeleteModal
+        document={documents.find((document) => document.id === deletingDocumentId) || null}
+        onClose={() => setDeletingDocumentId(null)}
+        onConfirm={() => {
+          setDocuments((current) => current.filter((document) => document.id !== deletingDocumentId));
+          setDeletingDocumentId(null);
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        }}
+      />
+      <DocumentRenameModal
+        document={documents.find((document) => document.id === renamingDocumentId) || null}
+        onClose={() => setRenamingDocumentId(null)}
+        onSave={(name) => {
+          if (renamingDocumentId) renameDocument(renamingDocumentId, name);
         }}
       />
       <ProjectAssignmentModal
@@ -256,7 +343,9 @@ export default function App() {
         onClose={() => setMovingDocumentId(null)}
         onSelect={(projectId) => {
           setDocuments((current) =>
-            current.map((document) => (document.id === movingDocumentId ? { ...document, projectId } : document)),
+            current.map((document) =>
+              document.id === movingDocumentId ? { ...document, projectId, modifiedAt: Date.now() } : document,
+            ),
           );
           setMovingDocumentId(null);
           void Haptics.selectionAsync();
