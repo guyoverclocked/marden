@@ -10,7 +10,6 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import Storage from '@react-native-async-storage/async-storage';
@@ -50,6 +49,9 @@ export function ReaderScreen({ document, onBack, onToggleFavorite, onProgress }:
   const restoredRef = useRef(false);
   const contentHeightRef = useRef(0);
   const viewportHeightRef = useRef(0);
+  const liveProgressRef = useRef(document.readingProgress);
+  const persistedProgressRef = useRef(document.readingProgress);
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [progress, setProgress] = useState(document.readingProgress);
   const [textScale, setTextScale] = useState<TextScale>('comfortable');
   const [focusMode, setFocusMode] = useState(false);
@@ -59,6 +61,8 @@ export function ReaderScreen({ document, onBack, onToggleFavorite, onProgress }:
 
   useEffect(() => {
     restoredRef.current = false;
+    liveProgressRef.current = document.readingProgress;
+    persistedProgressRef.current = document.readingProgress;
     setProgress(document.readingProgress);
   }, [document.id, document.readingProgress]);
 
@@ -70,6 +74,13 @@ export function ReaderScreen({ document, onBack, onToggleFavorite, onProgress }:
       if (scale && scales.includes(scale)) setTextScale(scale);
     });
   }, []);
+
+  useEffect(
+    () => () => {
+      if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    },
+    [],
+  );
 
   const restorePosition = () => {
     if (restoredRef.current || document.readingProgress <= 0 || contentHeightRef.current <= viewportHeightRef.current) {
@@ -84,14 +95,55 @@ export function ReaderScreen({ document, onBack, onToggleFavorite, onProgress }:
     });
   };
 
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+  const progressFromEvent = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     contentHeightRef.current = contentSize.height;
     viewportHeightRef.current = layoutMeasurement.height;
     const available = Math.max(1, contentSize.height - layoutMeasurement.height);
-    const next = Math.min(1, Math.max(0, contentOffset.y / available));
-    setProgress(next);
-    onProgress(next);
+    return Math.min(1, Math.max(0, contentOffset.y / available));
+  };
+
+  // Keep continuous scrolling off React's render path. The reader used to
+  // update both local state and the entire library for every scroll event,
+  // which forced large Markdown documents to reconcile while moving.
+  const trackScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    liveProgressRef.current = progressFromEvent(event);
+  };
+
+  const commitProgress = (event?: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const next = event ? progressFromEvent(event) : liveProgressRef.current;
+    liveProgressRef.current = next;
+    setProgress((current) => (Math.abs(current - next) >= 0.001 ? next : current));
+    if (Math.abs(persistedProgressRef.current - next) >= 0.002) {
+      persistedProgressRef.current = next;
+      onProgress(next);
+    }
+  };
+
+  const scheduleProgressCommit = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    trackScroll(event);
+    if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    settleTimerRef.current = setTimeout(() => {
+      settleTimerRef.current = null;
+      commitProgress();
+    }, 180);
+  };
+
+  const beginMomentum = () => {
+    if (settleTimerRef.current) {
+      clearTimeout(settleTimerRef.current);
+      settleTimerRef.current = null;
+    }
+  };
+
+  const finishMomentum = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    beginMomentum();
+    commitProgress(event);
+  };
+
+  const leaveReader = () => {
+    commitProgress();
+    onBack();
   };
 
   const cycleScale = () => {
@@ -136,7 +188,7 @@ export function ReaderScreen({ document, onBack, onToggleFavorite, onProgress }:
             accessibilityRole="button"
             accessibilityLabel="Back to library"
             hitSlop={8}
-            onPress={onBack}
+            onPress={leaveReader}
             style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
           >
             <ChevronLeft size={24} color={darkMode ? '#E9ECE7' : colors.ink} strokeWidth={2} />
@@ -183,8 +235,11 @@ export function ReaderScreen({ document, onBack, onToggleFavorite, onProgress }:
           viewportHeightRef.current = event.nativeEvent.layout.height;
           restorePosition();
         }}
-        onScroll={handleScroll}
-        scrollEventThrottle={80}
+        onScroll={trackScroll}
+        onScrollEndDrag={scheduleProgressCommit}
+        onMomentumScrollBegin={beginMomentum}
+        onMomentumScrollEnd={finishMomentum}
+        scrollEventThrottle={100}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.paper}>
@@ -219,9 +274,7 @@ export function ReaderScreen({ document, onBack, onToggleFavorite, onProgress }:
           <Minimize2 size={18} color={darkMode ? '#E9ECE7' : colors.ink} />
         </Pressable>
       ) : (
-        <BlurView
-          intensity={82}
-          tint={darkMode ? 'systemChromeMaterialDark' : 'systemChromeMaterialLight'}
+        <View
           style={[styles.toolbarShell, darkMode && styles.toolbarShellDark, { bottom: insets.bottom + 12 }]}
         >
           <ReaderTool label="Outline" darkMode={darkMode} onPress={() => setOutlineOpen(true)}>
@@ -243,7 +296,7 @@ export function ReaderScreen({ document, onBack, onToggleFavorite, onProgress }:
           <ReaderTool label="Focus" darkMode={darkMode} onPress={toggleFocus}>
             <Maximize2 size={19} color={darkMode ? '#BAC4BD' : colors.inkSoft} />
           </ReaderTool>
-        </BlurView>
+        </View>
       )}
 
       <Modal animationType="slide" transparent visible={outlineOpen} onRequestClose={() => setOutlineOpen(false)}>
@@ -488,11 +541,13 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.75)',
+    backgroundColor: 'rgba(251,250,247,0.98)',
     overflow: 'hidden',
     ...shadow.floating,
   },
   toolbarShellDark: {
     borderColor: 'rgba(72,84,76,0.76)',
+    backgroundColor: 'rgba(26,31,28,0.98)',
   },
   toolButton: {
     flex: 1,

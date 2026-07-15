@@ -29,7 +29,7 @@ const tableColumnWidth = (index: number, columnCount: number) => {
   return index === columnCount - 1 ? 280 : 170;
 };
 
-export function MarkdownRenderer({ content, textScale, darkMode = false }: MarkdownRendererProps) {
+function MarkdownRendererComponent({ content, textScale, darkMode = false }: MarkdownRendererProps) {
   const scale = sizes[textScale];
   const reader = darkMode
     ? {
@@ -295,6 +295,10 @@ export function MarkdownRenderer({ content, textScale, darkMode = false }: Markd
     </Markdown>
   );
 }
+
+// Reader chrome (progress, outline, and focus controls) can update without
+// reparsing and reconciling the full Markdown document.
+export const MarkdownRenderer = React.memo(MarkdownRendererComponent);
 
 const styles = StyleSheet.create({
   tableShell: {
