@@ -46,6 +46,7 @@ yarn-error.*
 /artifacts/*.apk
 /artifacts/*.ipa
 /artifacts/*.xcarchive
+/artifacts/macos/
 
 # local assistant and workspace instructions
 .claude/

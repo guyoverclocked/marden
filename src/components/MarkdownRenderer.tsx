@@ -14,19 +14,20 @@ type MarkdownRendererProps = {
 };
 
 const sizes = {
-  compact: { body: 15, line: 25, h1: 31, h2: 23, h3: 18 },
-  comfortable: { body: 17, line: 29, h1: 34, h2: 25, h3: 20 },
-  large: { body: 19, line: 32, h1: 38, h2: 28, h3: 22 },
+  compact: { body: 15, line: 25, h1: 31, h2: 23, h3: 18, table: 12, tableHead: 11.5, tableLine: 18 },
+  comfortable: { body: 17, line: 29, h1: 34, h2: 25, h3: 20, table: 14, tableHead: 13.5, tableLine: 21 },
+  large: { body: 19, line: 32, h1: 38, h2: 28, h3: 22, table: 16, tableHead: 15.5, tableLine: 24 },
 };
 
 // Standard Markdown links stay enabled; bare-URL scanning and raw HTML are disabled.
 const markdownParser = MarkdownIt({ typographer: true, linkify: false, html: false });
 
-const tableColumnWidth = (index: number, columnCount: number) => {
-  if (columnCount === 2) return index === 0 ? 230 : 410;
-  if (columnCount === 3) return [200, 180, 310][index] || 180;
-  if (columnCount === 4) return [180, 150, 90, 320][index] || 180;
-  return index === columnCount - 1 ? 280 : 170;
+const tableColumnWidth = (index: number, columnCount: number, textScale: TextScale) => {
+  const multiplier = sizes[textScale].table / sizes.comfortable.table;
+  if (columnCount === 2) return (index === 0 ? 230 : 410) * multiplier;
+  if (columnCount === 3) return ([200, 180, 310][index] || 180) * multiplier;
+  if (columnCount === 4) return ([180, 150, 90, 320][index] || 180) * multiplier;
+  return (index === columnCount - 1 ? 280 : 170) * multiplier;
 };
 
 function MarkdownRendererComponent({ content, textScale, darkMode = false }: MarkdownRendererProps) {
@@ -147,8 +148,8 @@ function MarkdownRendererComponent({ content, textScale, darkMode = false }: Mar
         color: '#E8EEE9',
         backgroundColor: reader.code,
         fontFamily: fonts.mono,
-        fontSize: 12.5,
-        lineHeight: 20,
+        fontSize: Math.max(11.5, scale.body - 4.5),
+        lineHeight: Math.max(19, scale.line - 9),
       },
       fence: {
         marginVertical: 15,
@@ -158,8 +159,8 @@ function MarkdownRendererComponent({ content, textScale, darkMode = false }: Mar
         color: '#E8EEE9',
         backgroundColor: reader.code,
         fontFamily: fonts.mono,
-        fontSize: 12.5,
-        lineHeight: 20,
+        fontSize: Math.max(11.5, scale.body - 4.5),
+        lineHeight: Math.max(19, scale.line - 9),
       },
       hr: { height: 1, marginVertical: 28, backgroundColor: reader.line },
       table: {
@@ -170,14 +171,14 @@ function MarkdownRendererComponent({ content, textScale, darkMode = false }: Mar
       th: {
         color: reader.ink,
         fontFamily: fonts.semibold,
-        fontSize: 12,
-        lineHeight: 18,
+        fontSize: scale.tableHead,
+        lineHeight: scale.tableLine,
       },
       td: {
         color: reader.ink,
         fontFamily: fonts.regular,
-        fontSize: 13,
-        lineHeight: 20,
+        fontSize: scale.table,
+        lineHeight: scale.tableLine,
       },
       image: { flex: 1, borderRadius: 12 },
     }),
@@ -194,10 +195,18 @@ function MarkdownRendererComponent({ content, textScale, darkMode = false }: Mar
           return <MermaidDiagram key={node.key} source={node.content} darkMode={darkMode} />;
         }
 
-        return <CodeBlock key={node.key} code={node.content} language={language} darkMode={darkMode} />;
+        return (
+          <CodeBlock
+            key={node.key}
+            code={node.content}
+            language={language}
+            darkMode={darkMode}
+            textScale={textScale}
+          />
+        );
       },
       code_block: (node: { key: string; content: string }) => (
-        <CodeBlock key={node.key} code={node.content} darkMode={darkMode} />
+        <CodeBlock key={node.key} code={node.content} darkMode={darkMode} textScale={textScale} />
       ),
       table: (node: { key: string }, children: React.ReactNode) => (
         <View key={node.key} style={[styles.tableShell, darkMode && styles.tableShellDark]}>
@@ -251,7 +260,7 @@ function MarkdownRendererComponent({ content, textScale, darkMode = false }: Mar
               styles.tableCell,
               styles.tableHeaderCell,
               darkMode && styles.tableCellDark,
-              { width: tableColumnWidth(node.index, count) },
+              { width: tableColumnWidth(node.index, count, textScale) },
             ]}
           >
             {children}
@@ -270,7 +279,7 @@ function MarkdownRendererComponent({ content, textScale, darkMode = false }: Mar
             style={[
               styles.tableCell,
               darkMode && styles.tableCellDark,
-              { width: tableColumnWidth(node.index, count) },
+              { width: tableColumnWidth(node.index, count, textScale) },
             ]}
           >
             {children}
@@ -278,7 +287,7 @@ function MarkdownRendererComponent({ content, textScale, darkMode = false }: Mar
         );
       },
     }),
-    [darkMode],
+    [darkMode, textScale],
   );
 
   return (

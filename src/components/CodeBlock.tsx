@@ -2,18 +2,27 @@ import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { colors, fonts, radii } from '../theme';
+import { TextScale } from '../types';
 
 type CodeBlockProps = {
   code: string;
   language?: string;
   darkMode?: boolean;
+  textScale: TextScale;
 };
 
 const normalizeCode = (value: string) => value.replace(/\r\n?/g, '\n').replace(/\n$/, '');
 
-export function CodeBlock({ code, language, darkMode = false }: CodeBlockProps) {
+const codeSizes: Record<TextScale, { code: number; line: number; number: number }> = {
+  compact: { code: 11.5, line: 19, number: 10.5 },
+  comfortable: { code: 12.5, line: 20, number: 11.5 },
+  large: { code: 15, line: 24, number: 13.5 },
+};
+
+export function CodeBlock({ code, language, darkMode = false, textScale }: CodeBlockProps) {
   const lines = useMemo(() => normalizeCode(code).split('\n'), [code]);
   const label = language?.trim().toUpperCase() || 'CODE';
+  const type = codeSizes[textScale];
 
   return (
     <View style={[styles.shell, darkMode && styles.shellDark]}>
@@ -24,7 +33,9 @@ export function CodeBlock({ code, language, darkMode = false }: CodeBlockProps) 
       <View style={styles.codeRow}>
         <View style={[styles.gutter, darkMode && styles.gutterDark]} accessibilityElementsHidden>
           {lines.map((_, index) => (
-            <Text key={index} style={styles.lineNumber}>{index + 1}</Text>
+            <Text key={index} style={[styles.lineNumber, { fontSize: type.number, lineHeight: type.line }]}>
+              {index + 1}
+            </Text>
           ))}
         </View>
         <ScrollView
@@ -35,7 +46,9 @@ export function CodeBlock({ code, language, darkMode = false }: CodeBlockProps) 
         >
           <View>
             {lines.map((line, index) => (
-              <Text key={index} selectable style={styles.codeText}>{line || '\u00A0'}</Text>
+              <Text key={index} selectable style={[styles.codeText, { fontSize: type.code, lineHeight: type.line }]}>
+                {line || '\u00A0'}
+              </Text>
             ))}
           </View>
         </ScrollView>

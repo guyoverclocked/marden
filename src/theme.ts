@@ -18,6 +18,25 @@ export const colors = {
   error: '#A9473F',
   shadow: '#1C211E',
 };
+
+export const darkColors: typeof colors = {
+  canvas: '#141816',
+  paper: '#181D1A',
+  paperStrong: '#202622',
+  ink: '#E9ECE7',
+  inkSoft: '#BAC4BD',
+  inkFaint: '#89948D',
+  line: '#303833',
+  lineStrong: '#404A44',
+  moss: '#B9D7C4',
+  mossDark: '#A8CAB4',
+  mossSoft: '#26372F',
+  lime: '#D7E9A2',
+  sand: '#29312C',
+  amber: '#D59A64',
+  error: '#E58D83',
+  shadow: '#050706',
+};
 export const fonts = {
   regular: 'Inter_400Regular',
   medium: 'Inter_500Medium',

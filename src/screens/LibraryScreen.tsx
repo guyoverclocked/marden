@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import {
@@ -27,7 +28,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BrandMark } from '../components/BrandMark';
 import { DocumentCard } from '../components/DocumentCard';
-import { colors, fonts, radii, shadow } from '../theme';
+import { colors, darkColors, fonts, radii, shadow } from '../theme';
 import { LibraryFilter, MarkdownDocument, Project, ProjectFilter } from '../types';
 
 const PROJECT_COLORS = ['#315C4A', '#6A4950', '#4B596C', '#9A6B3F', '#66548A', '#3F7180'];
@@ -35,6 +36,7 @@ const PROJECT_COLORS = ['#315C4A', '#6A4950', '#4B596C', '#9A6B3F', '#66548A', '
 type LibraryScreenProps = {
   documents: MarkdownDocument[];
   projects: Project[];
+  darkMode: boolean;
   isLoading: boolean;
   isImporting: boolean;
   onImport: () => void;
@@ -47,6 +49,7 @@ type LibraryScreenProps = {
 export function LibraryScreen({
   documents,
   projects,
+  darkMode,
   isLoading,
   isImporting,
   onImport,
@@ -55,6 +58,9 @@ export function LibraryScreen({
   onOpen,
   onDocumentMenu,
 }: LibraryScreenProps) {
+  const { width: windowWidth } = useWindowDimensions();
+  const desktop = windowWidth >= 900;
+  const theme = darkMode ? darkColors : colors;
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -108,9 +114,9 @@ export function LibraryScreen({
         : projects.find((project) => project.id === projectFilter)?.name || 'Project';
 
   return (
-    <SafeAreaView edges={['top']} style={styles.safeArea}>
+    <SafeAreaView edges={['top']} style={[styles.safeArea, darkMode && styles.safeAreaDark]}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, desktop && styles.scrollContentDesktop]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -118,31 +124,31 @@ export function LibraryScreen({
           <View style={styles.brandRow}>
             <BrandMark />
             <View style={styles.brandCopy}>
-              <Text style={styles.brandName}>Marden</Text>
-              <Text style={styles.brandTagline}>Your Markdown, beautifully kept.</Text>
+              <Text style={[styles.brandName, darkMode && styles.textStrongDark]}>Marden</Text>
+              <Text style={[styles.brandTagline, darkMode && styles.textSoftDark]}>Your Markdown, beautifully kept.</Text>
             </View>
           </View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Search library"
             onPress={() => setSearchOpen(true)}
-            style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.headerButton, darkMode && styles.surfaceDark, pressed && styles.pressed]}
           >
-            <Search size={21} color={colors.ink} />
+            <Search size={21} color={theme.ink} />
           </Pressable>
         </View>
 
         {searchOpen ? (
-          <View style={styles.searchBox}>
-            <Search size={18} color={colors.inkFaint} />
+          <View style={[styles.searchBox, darkMode && styles.surfaceDark]}>
+            <Search size={18} color={theme.inkFaint} />
             <TextInput
               autoFocus
               value={query}
               onChangeText={setQuery}
               placeholder="Search files, projects and text"
-              placeholderTextColor={colors.inkFaint}
-              selectionColor={colors.moss}
-              style={styles.searchInput}
+              placeholderTextColor={theme.inkFaint}
+              selectionColor={theme.moss}
+              style={[styles.searchInput, darkMode && styles.textStrongDark]}
             />
             <Pressable
               accessibilityRole="button"
@@ -150,11 +156,14 @@ export function LibraryScreen({
               hitSlop={10}
               onPress={closeSearch}
             >
-              <X size={18} color={colors.inkSoft} />
+              <X size={18} color={theme.inkSoft} />
             </Pressable>
           </View>
         ) : (
-          <LinearGradient colors={[colors.moss, colors.mossDark]} style={styles.importCard}>
+          <LinearGradient
+            colors={[colors.moss, colors.mossDark]}
+            style={[styles.importCard, desktop && styles.importCardDesktop]}
+          >
             <View style={styles.sparkleBadge}>
               <Sparkles size={14} color={colors.lime} />
               <Text style={styles.sparkleText}>YOUR READING SPACE</Text>
@@ -188,30 +197,31 @@ export function LibraryScreen({
 
         <View style={styles.projectsHeader}>
           <View>
-            <Text style={styles.eyebrow}>PROJECTS</Text>
-            <Text style={styles.projectsTitle}>Keep work together</Text>
+            <Text style={[styles.eyebrow, darkMode && styles.accentTextDark]}>PROJECTS</Text>
+            <Text style={[styles.projectsTitle, darkMode && styles.textStrongDark]}>Keep work together</Text>
           </View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Create a new project"
             onPress={() => setProjectModalOpen(true)}
-            style={({ pressed }) => [styles.newProjectButton, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.newProjectButton, darkMode && styles.accentSurfaceDark, pressed && styles.pressed]}
           >
-            <FolderPlus size={15} color={colors.moss} />
-            <Text style={styles.newProjectText}>New</Text>
+            <FolderPlus size={15} color={theme.moss} />
+            <Text style={[styles.newProjectText, darkMode && styles.accentTextDark]}>New</Text>
           </Pressable>
         </View>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.projectChips}
-          style={styles.projectScroll}
+          contentContainerStyle={[styles.projectChips, desktop && styles.projectChipsDesktop]}
+          style={[styles.projectScroll, desktop && styles.projectScrollDesktop]}
         >
           <ProjectChip
             label="All files"
             count={documents.length}
             color={colors.moss}
             selected={projectFilter === 'all'}
+            darkMode={darkMode}
             onPress={() => setProjectFilter('all')}
           />
           <ProjectChip
@@ -219,6 +229,7 @@ export function LibraryScreen({
             count={documents.filter((document) => !document.projectId).length}
             color={colors.lineStrong}
             selected={projectFilter === 'unfiled'}
+            darkMode={darkMode}
             onPress={() => setProjectFilter('unfiled')}
           />
           {projects.map((project) => (
@@ -228,6 +239,7 @@ export function LibraryScreen({
               count={documents.filter((document) => document.projectId === project.id).length}
               color={project.color}
               selected={projectFilter === project.id}
+              darkMode={darkMode}
               onPress={() => setProjectFilter(project.id)}
             />
           ))}
@@ -235,35 +247,55 @@ export function LibraryScreen({
             accessibilityRole="button"
             accessibilityLabel="Add project"
             onPress={() => setProjectModalOpen(true)}
-            style={({ pressed }) => [styles.addProjectChip, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.addProjectChip, darkMode && styles.surfaceDark, pressed && styles.pressed]}
           >
-            <Plus size={17} color={colors.moss} />
+            <Plus size={17} color={theme.moss} />
           </Pressable>
         </ScrollView>
 
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.eyebrow}>
+            <Text style={[styles.eyebrow, darkMode && styles.accentTextDark]}>
               {query ? `${visibleDocuments.length} ${visibleDocuments.length === 1 ? 'MATCH' : 'MATCHES'}` : 'YOUR LIBRARY'}
             </Text>
-            <Text style={styles.sectionTitle}>{query ? 'Search results' : activeProjectName}</Text>
+            <Text style={[styles.sectionTitle, darkMode && styles.textStrongDark]}>
+              {query ? 'Search results' : activeProjectName}
+            </Text>
           </View>
           <View style={styles.filters}>
             <Pressable
               onPress={() => setFilter('all')}
-              style={[styles.filterButton, filter === 'all' && styles.filterButtonActive]}
+              style={[
+                styles.filterButton,
+                darkMode && styles.surfaceDark,
+                filter === 'all' && styles.filterButtonActive,
+                darkMode && filter === 'all' && styles.filterButtonActiveDark,
+              ]}
             >
-              <FolderOpen size={14} color={filter === 'all' ? colors.paper : colors.inkSoft} />
-              <Text style={[styles.filterText, filter === 'all' && styles.filterTextActive]}>All</Text>
+              <FolderOpen size={14} color={filter === 'all' ? colors.paper : theme.inkSoft} />
+              <Text
+                style={[
+                  styles.filterText,
+                  darkMode && styles.textSoftDark,
+                  filter === 'all' && styles.filterTextActive,
+                ]}
+              >
+                All
+              </Text>
             </Pressable>
             <Pressable
               accessibilityLabel="Show favorites"
               onPress={() => setFilter('favorites')}
-              style={[styles.starFilter, filter === 'favorites' && styles.starFilterActive]}
+              style={[
+                styles.starFilter,
+                darkMode && styles.surfaceDark,
+                filter === 'favorites' && styles.starFilterActive,
+                darkMode && filter === 'favorites' && styles.starFilterActiveDark,
+              ]}
             >
               <Star
                 size={16}
-                color={filter === 'favorites' ? colors.mossDark : colors.inkSoft}
+                color={filter === 'favorites' ? colors.mossDark : theme.inkSoft}
                 fill={filter === 'favorites' ? colors.lime : 'transparent'}
               />
             </Pressable>
@@ -271,35 +303,39 @@ export function LibraryScreen({
         </View>
 
         {isLoading ? (
-          <View style={styles.stateCard}>
-            <ActivityIndicator color={colors.moss} />
-            <Text style={styles.stateText}>Opening your library…</Text>
+          <View style={[styles.stateCard, darkMode && styles.surfaceDark]}>
+            <ActivityIndicator color={theme.moss} />
+            <Text style={[styles.stateText, darkMode && styles.textSoftDark]}>Opening your library…</Text>
           </View>
         ) : visibleDocuments.length > 0 ? (
-          <View style={styles.documentList}>
+          <View style={[styles.documentList, desktop && styles.documentListDesktop]}>
             {visibleDocuments.map((document) => (
               <DocumentCard
                 key={document.id}
                 document={document}
                 projectName={projects.find((project) => project.id === document.projectId)?.name}
+                darkMode={darkMode}
+                desktop={desktop}
                 onPress={() => onOpen(document)}
                 onMenu={() => onDocumentMenu(document)}
               />
             ))}
           </View>
         ) : (
-          <View style={styles.stateCard}>
-            <View style={styles.emptyIcon}>
-              <FolderOpen size={24} color={colors.moss} />
+          <View style={[styles.stateCard, darkMode && styles.surfaceDark]}>
+            <View style={[styles.emptyIcon, darkMode && styles.accentSurfaceDark]}>
+              <FolderOpen size={24} color={theme.moss} />
             </View>
-            <Text style={styles.emptyTitle}>{query ? 'Nothing found' : 'No saved files yet'}</Text>
-            <Text style={styles.stateText}>
+            <Text style={[styles.emptyTitle, darkMode && styles.textStrongDark]}>
+              {query ? 'Nothing found' : 'No saved files yet'}
+            </Text>
+            <Text style={[styles.stateText, darkMode && styles.textSoftDark]}>
               {query ? 'Try another title or phrase.' : 'Import a Markdown file to begin your library.'}
             </Text>
           </View>
         )}
 
-        <Text style={styles.localNote}>Private by default · Kept on this device</Text>
+        <Text style={[styles.localNote, darkMode && styles.textFaintDark]}>Made with ❤️ by Nambi</Text>
       </ScrollView>
 
       <Pressable
@@ -307,7 +343,12 @@ export function LibraryScreen({
         accessibilityLabel="Add Markdown"
         disabled={isImporting}
         onPress={() => setAddSheetOpen(true)}
-        style={({ pressed }) => [styles.floatingButton, pressed && styles.floatingButtonPressed]}
+        style={({ pressed }) => [
+          styles.floatingButton,
+          darkMode && styles.floatingButtonDark,
+          desktop && { right: Math.max(36, (windowWidth - 1180) / 2 + 36) },
+          pressed && styles.floatingButtonPressed,
+        ]}
       >
         {isImporting ? (
           <ActivityIndicator size="small" color={colors.mossDark} />
@@ -319,10 +360,13 @@ export function LibraryScreen({
       <Modal animationType="slide" transparent visible={addSheetOpen} onRequestClose={() => setAddSheetOpen(false)}>
         <View style={styles.modalRoot}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setAddSheetOpen(false)} />
-          <SafeAreaView edges={['bottom']} style={styles.addSheet}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.sheetEyebrow}>ADD TO MARDEN</Text>
-            <Text style={styles.sheetTitle}>How would you like to begin?</Text>
+          <SafeAreaView
+            edges={['bottom']}
+            style={[styles.addSheet, darkMode && styles.addSheetDark, desktop && styles.addSheetDesktop]}
+          >
+            <View style={[styles.sheetHandle, darkMode && styles.sheetHandleDark]} />
+            <Text style={[styles.sheetEyebrow, darkMode && styles.accentTextDark]}>ADD TO MARDEN</Text>
+            <Text style={[styles.sheetTitle, darkMode && styles.textStrongDark]}>How would you like to begin?</Text>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Import a Markdown file"
@@ -330,14 +374,21 @@ export function LibraryScreen({
                 setAddSheetOpen(false);
                 onImport();
               }}
-              style={({ pressed }) => [styles.addOption, pressed && styles.addOptionPressed]}
+              style={({ pressed }) => [
+                styles.addOption,
+                darkMode && styles.surfaceDark,
+                pressed && styles.addOptionPressed,
+                darkMode && pressed && styles.addOptionPressedDark,
+              ]}
             >
-              <View style={[styles.addOptionIcon, styles.importOptionIcon]}>
-                <FileUp size={22} color={colors.moss} />
+              <View style={[styles.addOptionIcon, styles.importOptionIcon, darkMode && styles.accentSurfaceDark]}>
+                <FileUp size={22} color={theme.moss} />
               </View>
               <View style={styles.addOptionCopy}>
-                <Text style={styles.addOptionTitle}>Import a file</Text>
-                <Text style={styles.addOptionBody}>Choose .md or .markdown from Files, Drive, or another app.</Text>
+                <Text style={[styles.addOptionTitle, darkMode && styles.textStrongDark]}>Import a file</Text>
+                <Text style={[styles.addOptionBody, darkMode && styles.textSoftDark]}>
+                  Choose .md or .markdown from Files, Drive, or another app.
+                </Text>
               </View>
             </Pressable>
             <Pressable
@@ -347,20 +398,27 @@ export function LibraryScreen({
                 setAddSheetOpen(false);
                 onCreateDocument();
               }}
-              style={({ pressed }) => [styles.addOption, pressed && styles.addOptionPressed]}
+              style={({ pressed }) => [
+                styles.addOption,
+                darkMode && styles.surfaceDark,
+                pressed && styles.addOptionPressed,
+                darkMode && pressed && styles.addOptionPressedDark,
+              ]}
             >
               <View style={[styles.addOptionIcon, styles.editorOptionIcon]}>
                 <PencilLine size={22} color="#65507B" />
               </View>
               <View style={styles.addOptionCopy}>
                 <View style={styles.addOptionTitleRow}>
-                  <Text style={styles.addOptionTitle}>Write or paste</Text>
-                  <View style={styles.aiBadge}>
-                    <Sparkles size={10} color={colors.moss} />
-                    <Text style={styles.aiBadgeText}>AI FRIENDLY</Text>
+                  <Text style={[styles.addOptionTitle, darkMode && styles.textStrongDark]}>Write or paste</Text>
+                  <View style={[styles.aiBadge, darkMode && styles.accentSurfaceDark]}>
+                    <Sparkles size={10} color={theme.moss} />
+                    <Text style={[styles.aiBadgeText, darkMode && styles.accentTextDark]}>AI FRIENDLY</Text>
                   </View>
                 </View>
-                <Text style={styles.addOptionBody}>Start a note or paste Markdown from your favourite AI app.</Text>
+                <Text style={[styles.addOptionBody, darkMode && styles.textSoftDark]}>
+                  Start a note or paste Markdown from your favourite AI app.
+                </Text>
               </View>
             </Pressable>
           </SafeAreaView>
@@ -375,24 +433,26 @@ export function LibraryScreen({
       >
         <View style={styles.centeredModalRoot}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setProjectModalOpen(false)} />
-          <View style={styles.projectModalCard}>
-            <View style={styles.projectModalIcon}>
-              <FolderPlus size={22} color={colors.moss} />
+          <View style={[styles.projectModalCard, darkMode && styles.projectModalCardDark]}>
+            <View style={[styles.projectModalIcon, darkMode && styles.accentSurfaceDark]}>
+              <FolderPlus size={22} color={theme.moss} />
             </View>
-            <Text style={styles.projectModalTitle}>Create a project</Text>
-            <Text style={styles.projectModalBody}>Group related Markdown while everything else stays Unfiled.</Text>
+            <Text style={[styles.projectModalTitle, darkMode && styles.textStrongDark]}>Create a project</Text>
+            <Text style={[styles.projectModalBody, darkMode && styles.textSoftDark]}>
+              Group related Markdown while everything else stays Unfiled.
+            </Text>
             <TextInput
               autoFocus
               value={newProjectName}
               onChangeText={setNewProjectName}
               onSubmitEditing={createProject}
               placeholder="Project name"
-              placeholderTextColor={colors.inkFaint}
+              placeholderTextColor={theme.inkFaint}
               returnKeyType="done"
-              selectionColor={colors.moss}
-              style={styles.projectNameInput}
+              selectionColor={theme.moss}
+              style={[styles.projectNameInput, darkMode && styles.projectNameInputDark]}
             />
-            <Text style={styles.colorLabel}>COLOR</Text>
+            <Text style={[styles.colorLabel, darkMode && styles.textFaintDark]}>COLOR</Text>
             <View style={styles.colorOptions}>
               {PROJECT_COLORS.map((color) => (
                 <Pressable
@@ -407,7 +467,7 @@ export function LibraryScreen({
             </View>
             <View style={styles.projectModalActions}>
               <Pressable onPress={() => setProjectModalOpen(false)} style={styles.cancelProjectButton}>
-                <Text style={styles.cancelProjectText}>Cancel</Text>
+                <Text style={[styles.cancelProjectText, darkMode && styles.textSoftDark]}>Cancel</Text>
               </Pressable>
               <Pressable
                 disabled={!newProjectName.trim()}
@@ -429,21 +489,48 @@ function ProjectChip({
   count,
   color,
   selected,
+  darkMode,
   onPress,
 }: {
   label: string;
   count: number;
   color: string;
   selected: boolean;
+  darkMode: boolean;
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={[styles.projectChip, selected && styles.projectChipSelected]}>
+    <Pressable
+      onPress={onPress}
+      style={[
+        styles.projectChip,
+        darkMode && styles.surfaceDark,
+        selected && styles.projectChipSelected,
+        darkMode && selected && styles.projectChipSelectedDark,
+      ]}
+    >
       <View style={[styles.projectChipDot, { backgroundColor: color }]} />
-      <Text numberOfLines={1} style={[styles.projectChipLabel, selected && styles.projectChipLabelSelected]}>
+      <Text
+        numberOfLines={1}
+        style={[
+          styles.projectChipLabel,
+          darkMode && styles.textSoftDark,
+          selected && styles.projectChipLabelSelected,
+          darkMode && selected && styles.textStrongDark,
+        ]}
+      >
         {label}
       </Text>
-      <Text style={[styles.projectChipCount, selected && styles.projectChipCountSelected]}>{count}</Text>
+      <Text
+        style={[
+          styles.projectChipCount,
+          darkMode && styles.textFaintDark,
+          selected && styles.projectChipCountSelected,
+          darkMode && selected && styles.accentTextDark,
+        ]}
+      >
+        {count}
+      </Text>
     </Pressable>
   );
 }
@@ -1013,5 +1100,83 @@ const styles = StyleSheet.create({
     color: colors.paper,
     fontFamily: fonts.semibold,
     fontSize: 11,
+  },
+  safeAreaDark: {
+    backgroundColor: darkColors.canvas,
+  },
+  scrollContentDesktop: {
+    width: '100%',
+    maxWidth: 1180,
+    alignSelf: 'center',
+    paddingHorizontal: 36,
+  },
+  importCardDesktop: {
+    minHeight: 230,
+  },
+  projectScrollDesktop: {
+    marginHorizontal: -36,
+  },
+  projectChipsDesktop: {
+    paddingHorizontal: 36,
+  },
+  documentListDesktop: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  addSheetDesktop: {
+    width: 560,
+    alignSelf: 'center',
+  },
+  surfaceDark: {
+    backgroundColor: darkColors.paperStrong,
+    borderColor: darkColors.line,
+  },
+  accentSurfaceDark: {
+    backgroundColor: darkColors.mossSoft,
+  },
+  textStrongDark: {
+    color: darkColors.ink,
+  },
+  textSoftDark: {
+    color: darkColors.inkSoft,
+  },
+  textFaintDark: {
+    color: darkColors.inkFaint,
+  },
+  accentTextDark: {
+    color: darkColors.moss,
+  },
+  filterButtonActiveDark: {
+    borderColor: colors.moss,
+    backgroundColor: colors.moss,
+  },
+  starFilterActiveDark: {
+    borderColor: '#506449',
+    backgroundColor: '#35412F',
+  },
+  projectChipSelectedDark: {
+    borderColor: '#688373',
+    backgroundColor: darkColors.mossSoft,
+  },
+  floatingButtonDark: {
+    borderColor: darkColors.canvas,
+  },
+  addSheetDark: {
+    backgroundColor: darkColors.paper,
+  },
+  sheetHandleDark: {
+    backgroundColor: darkColors.lineStrong,
+  },
+  addOptionPressedDark: {
+    borderColor: '#688373',
+    backgroundColor: darkColors.mossSoft,
+  },
+  projectModalCardDark: {
+    backgroundColor: darkColors.paperStrong,
+  },
+  projectNameInputDark: {
+    color: darkColors.ink,
+    borderColor: darkColors.lineStrong,
+    backgroundColor: darkColors.paper,
   },
 });

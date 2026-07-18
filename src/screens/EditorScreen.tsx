@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
@@ -42,6 +43,8 @@ type EditorScreenProps = {
 type EditorMode = 'edit' | 'preview';
 
 export function EditorScreen({ projects, document, onCancel, onSave }: EditorScreenProps) {
+  const { width: windowWidth } = useWindowDimensions();
+  const desktop = windowWidth >= 900;
   const editorRef = useRef<TextInput>(null);
   const [mode, setMode] = useState<EditorMode>('edit');
   const [title, setTitle] = useState(document?.title || '');
@@ -127,7 +130,7 @@ export function EditorScreen({ projects, document, onCancel, onSave }: EditorScr
           </Pressable>
         </View>
 
-        <View style={styles.segmentedControl}>
+        <View style={[styles.segmentedControl, desktop && styles.segmentedControlDesktop]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Edit Markdown"
@@ -149,7 +152,7 @@ export function EditorScreen({ projects, document, onCancel, onSave }: EditorScr
         </View>
 
         {mode === 'edit' ? (
-          <View style={styles.editorLayout}>
+          <View style={[styles.editorLayout, desktop && styles.editorLayoutDesktop]}>
             <View style={styles.aiHint}>
               <View style={styles.aiHintIcon}>
                 <Sparkles size={15} color={colors.moss} />
@@ -232,7 +235,10 @@ export function EditorScreen({ projects, document, onCancel, onSave }: EditorScr
             </View>
           </View>
         ) : (
-          <ScrollView contentContainerStyle={styles.previewScroll} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            contentContainerStyle={[styles.previewScroll, desktop && styles.previewScrollDesktop]}
+            showsVerticalScrollIndicator={false}
+          >
             <View style={styles.previewMeta}>
               <View>
                 <Text style={styles.previewEyebrow}>LIVE PREVIEW</Text>
@@ -419,6 +425,12 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     backgroundColor: colors.sand,
   },
+  segmentedControlDesktop: {
+    width: '100%',
+    maxWidth: 1120,
+    alignSelf: 'center',
+    marginHorizontal: 0,
+  },
   segment: {
     flex: 1,
     flexDirection: 'row',
@@ -431,6 +443,7 @@ const styles = StyleSheet.create({
   segmentText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 11 },
   segmentTextActive: { color: colors.paper },
   editorLayout: { flex: 1, paddingHorizontal: 20 },
+  editorLayoutDesktop: { width: '100%', maxWidth: 1120, alignSelf: 'center', paddingHorizontal: 0 },
   aiHint: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -522,6 +535,7 @@ const styles = StyleSheet.create({
   },
   editorFooterText: { color: '#819087', fontFamily: fonts.semibold, fontSize: 8, letterSpacing: 0.8 },
   previewScroll: { paddingHorizontal: 23, paddingTop: 24, paddingBottom: 55 },
+  previewScrollDesktop: { width: '100%', maxWidth: 760, alignSelf: 'center', paddingHorizontal: 20 },
   previewMeta: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 13 },
   previewEyebrow: { color: colors.moss, fontFamily: fonts.semibold, fontSize: 8, letterSpacing: 1.2 },
   previewTitle: { marginTop: 4, color: colors.ink, fontFamily: fonts.semibold, fontSize: 18 },

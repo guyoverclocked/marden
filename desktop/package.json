@@ -1,0 +1,8 @@
+{
+  "name": "marden",
+  "version": "1.0.3",
+  "description": "A calm, private home for Markdown and ideas worth keeping.",
+  "author": "Nambi",
+  "main": "main.cjs",
+  "private": true
+}

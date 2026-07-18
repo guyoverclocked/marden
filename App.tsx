@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, BackHandler, StyleSheet, useColorScheme, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import Storage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import { File as ExpoFile } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
@@ -15,13 +16,14 @@ import { EditorScreen } from './src/screens/EditorScreen';
 import { LibraryScreen } from './src/screens/LibraryScreen';
 import { ReaderScreen } from './src/screens/ReaderScreen';
 import { loadLibrary, loadProjects, saveLibrary, saveProjects } from './src/storage/libraryStorage';
-import { colors } from './src/theme';
+import { colors, darkColors } from './src/theme';
 import { MarkdownDocument, Project } from './src/types';
 import { createDocument, markdownFileName, safeDocumentName, wordCount } from './src/utils/markdown';
 
 const isMarkdownFile = (name: string, mimeType?: string) =>
   /\.(md|markdown|mdown|mkd)$/i.test(name) || mimeType === 'text/markdown';
 const MAX_MARKDOWN_BYTES = 2 * 1024 * 1024;
+const READER_THEME_KEY = 'marden.reader.dark.v1';
 const MARDEN_FONTS = {
   Inter_400Regular: require('./assets/fonts/Inter-Regular.ttf'),
   Inter_500Medium: require('./assets/fonts/Inter-Medium.ttf'),
@@ -30,6 +32,7 @@ const MARDEN_FONTS = {
 } as const;
 
 export default function App() {
+  const systemColorScheme = useColorScheme();
   const [fontsLoaded] = useFonts(MARDEN_FONTS);
   const [documents, setDocuments] = useState<MarkdownDocument[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -42,7 +45,15 @@ export default function App() {
   const [movingDocumentId, setMovingDocumentId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isImporting, setIsImporting] = useState(false);
+  const [savedDarkMode, setSavedDarkMode] = useState<boolean | null>(null);
   const hydratedRef = useRef(false);
+  const darkMode = savedDarkMode ?? systemColorScheme === 'dark';
+
+  useEffect(() => {
+    Storage.getItem(READER_THEME_KEY).then((savedTheme) => {
+      if (savedTheme !== null) setSavedDarkMode(savedTheme === 'true');
+    });
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -78,6 +89,21 @@ export default function App() {
     () => documents.find((document) => document.id === activeDocumentId) || null,
     [activeDocumentId, documents],
   );
+
+  useEffect(() => {
+    if (!activeDocumentId) return undefined;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      setActiveDocumentId(null);
+      return true;
+    });
+    return () => subscription.remove();
+  }, [activeDocumentId]);
+
+  const toggleDarkMode = () => {
+    const next = !darkMode;
+    setSavedDarkMode(next);
+    void Storage.setItem(READER_THEME_KEY, String(next));
+  };
 
   const openDocument = (document: MarkdownDocument) => {
     const openedAt = Date.now();
@@ -248,15 +274,15 @@ export default function App() {
 
   if (!fontsLoaded) {
     return (
-      <View style={styles.loading}>
-        <ActivityIndicator color={colors.moss} />
+      <View style={[styles.loading, darkMode && styles.loadingDark]}>
+        <ActivityIndicator color={darkMode ? darkColors.moss : colors.moss} />
       </View>
     );
   }
 
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" />
+      <StatusBar style={darkMode ? 'light' : 'dark'} />
       {editorOpen ? (
         <EditorScreen
           projects={projects}
@@ -267,7 +293,9 @@ export default function App() {
       ) : activeDocument ? (
         <ReaderScreen
           document={activeDocument}
+          darkMode={darkMode}
           onBack={() => setActiveDocumentId(null)}
+          onToggleDarkMode={toggleDarkMode}
           onToggleFavorite={() => toggleFavorite(activeDocument.id)}
           onProgress={(readingProgress) => {
             setDocuments((current) =>
@@ -281,6 +309,7 @@ export default function App() {
         <LibraryScreen
           documents={documents}
           projects={projects}
+          darkMode={darkMode}
           isLoading={isLoading}
           isImporting={isImporting}
           onImport={importDocuments}
@@ -361,5 +390,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.canvas,
+  },
+  loadingDark: {
+    backgroundColor: darkColors.canvas,
   },
 });

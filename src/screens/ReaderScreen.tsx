@@ -7,7 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  useColorScheme,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
@@ -33,18 +33,27 @@ import { extractHeadings, formatRelativeDate, readMinutes } from '../utils/markd
 
 type ReaderScreenProps = {
   document: MarkdownDocument;
+  darkMode: boolean;
   onBack: () => void;
+  onToggleDarkMode: () => void;
   onToggleFavorite: () => void;
   onProgress: (progress: number) => void;
 };
 
 const scales: TextScale[] = ['compact', 'comfortable', 'large'];
-const READER_THEME_KEY = 'marden.reader.dark.v1';
 const READER_SCALE_KEY = 'marden.reader.scale.v1';
 
-export function ReaderScreen({ document, onBack, onToggleFavorite, onProgress }: ReaderScreenProps) {
+export function ReaderScreen({
+  document,
+  darkMode,
+  onBack,
+  onToggleDarkMode,
+  onToggleFavorite,
+  onProgress,
+}: ReaderScreenProps) {
   const insets = useSafeAreaInsets();
-  const systemColorScheme = useColorScheme();
+  const { width: windowWidth } = useWindowDimensions();
+  const desktop = windowWidth >= 900;
   const scrollRef = useRef<ScrollView>(null);
   const restoredRef = useRef(false);
   const contentHeightRef = useRef(0);
@@ -55,7 +64,6 @@ export function ReaderScreen({ document, onBack, onToggleFavorite, onProgress }:
   const [progress, setProgress] = useState(document.readingProgress);
   const [textScale, setTextScale] = useState<TextScale>('comfortable');
   const [focusMode, setFocusMode] = useState(false);
-  const [darkMode, setDarkMode] = useState(systemColorScheme === 'dark');
   const [outlineOpen, setOutlineOpen] = useState(false);
   const headings = useMemo(() => extractHeadings(document.content), [document.content]);
 
@@ -67,10 +75,8 @@ export function ReaderScreen({ document, onBack, onToggleFavorite, onProgress }:
   }, [document.id, document.readingProgress]);
 
   useEffect(() => {
-    Storage.multiGet([READER_THEME_KEY, READER_SCALE_KEY]).then((entries) => {
-      const theme = entries.find(([key]) => key === READER_THEME_KEY)?.[1];
-      const scale = entries.find(([key]) => key === READER_SCALE_KEY)?.[1] as TextScale | null | undefined;
-      if (theme !== null && theme !== undefined) setDarkMode(theme === 'true');
+    Storage.getItem(READER_SCALE_KEY).then((savedScale) => {
+      const scale = savedScale as TextScale | null;
       if (scale && scales.includes(scale)) setTextScale(scale);
     });
   }, []);
@@ -160,11 +166,7 @@ export function ReaderScreen({ document, onBack, onToggleFavorite, onProgress }:
   };
 
   const toggleDarkMode = () => {
-    setDarkMode((current) => {
-      const next = !current;
-      void Storage.setItem(READER_THEME_KEY, String(next));
-      return next;
-    });
+    onToggleDarkMode();
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
@@ -275,7 +277,12 @@ export function ReaderScreen({ document, onBack, onToggleFavorite, onProgress }:
         </Pressable>
       ) : (
         <View
-          style={[styles.toolbarShell, darkMode && styles.toolbarShellDark, { bottom: insets.bottom + 12 }]}
+          style={[
+            styles.toolbarShell,
+            darkMode && styles.toolbarShellDark,
+            desktop && styles.toolbarShellDesktop,
+            { bottom: insets.bottom + 12 },
+          ]}
         >
           <ReaderTool label="Outline" darkMode={darkMode} onPress={() => setOutlineOpen(true)}>
             <ListTree size={20} color={darkMode ? '#BAC4BD' : colors.inkSoft} />
@@ -302,7 +309,10 @@ export function ReaderScreen({ document, onBack, onToggleFavorite, onProgress }:
       <Modal animationType="slide" transparent visible={outlineOpen} onRequestClose={() => setOutlineOpen(false)}>
         <View style={styles.modalRoot}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setOutlineOpen(false)} />
-          <SafeAreaView edges={['bottom']} style={[styles.outlineSheet, darkMode && styles.outlineSheetDark]}>
+          <SafeAreaView
+            edges={['bottom']}
+            style={[styles.outlineSheet, darkMode && styles.outlineSheetDark, desktop && styles.outlineSheetDesktop]}
+          >
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <View>
@@ -549,6 +559,12 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(72,84,76,0.76)',
     backgroundColor: 'rgba(26,31,28,0.98)',
   },
+  toolbarShellDesktop: {
+    width: 520,
+    left: '50%',
+    right: undefined,
+    transform: [{ translateX: -260 }],
+  },
   toolButton: {
     flex: 1,
     height: 58,
@@ -605,6 +621,10 @@ const styles = StyleSheet.create({
   },
   outlineSheetDark: {
     backgroundColor: '#181D1A',
+  },
+  outlineSheetDesktop: {
+    width: 560,
+    alignSelf: 'center',
   },
   sheetHandle: {
     width: 38,

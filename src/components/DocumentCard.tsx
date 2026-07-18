@@ -4,12 +4,14 @@ import { Clock3, Folder, MoreHorizontal, Star } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { MarkdownDocument } from '../types';
-import { colors, fonts, radii, shadow } from '../theme';
+import { colors, darkColors, fonts, radii, shadow } from '../theme';
 import { formatRelativeDate, previewFromMarkdown, readMinutes } from '../utils/markdown';
 
 type DocumentCardProps = {
   document: MarkdownDocument;
   projectName?: string;
+  darkMode?: boolean;
+  desktop?: boolean;
   onPress: () => void;
   onMenu: () => void;
 };
@@ -26,11 +28,12 @@ const paletteFor = (id: string) => {
   return coverPalettes[index];
 };
 
-export function DocumentCard({ document, projectName, onPress, onMenu }: DocumentCardProps) {
+export function DocumentCard({ document, projectName, darkMode = false, desktop = false, onPress, onMenu }: DocumentCardProps) {
   const progress = Math.round(document.readingProgress * 100);
+  const theme = darkMode ? darkColors : colors;
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, darkMode && styles.cardDark, desktop && styles.cardDesktop]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Open ${document.title}`}
@@ -48,32 +51,32 @@ export function DocumentCard({ document, projectName, onPress, onMenu }: Documen
         </LinearGradient>
 
         <View style={styles.content}>
-          <Text numberOfLines={2} style={styles.title}>
+          <Text numberOfLines={2} style={[styles.title, darkMode && styles.titleDark]}>
             {document.title}
           </Text>
 
           {projectName ? (
-            <View style={styles.projectLabel}>
-              <Folder size={10} color={colors.moss} />
-              <Text numberOfLines={1} style={styles.projectLabelText}>
+            <View style={[styles.projectLabel, darkMode && styles.projectLabelDark]}>
+              <Folder size={10} color={theme.moss} />
+              <Text numberOfLines={1} style={[styles.projectLabelText, darkMode && styles.projectLabelTextDark]}>
                 {projectName}
               </Text>
             </View>
           ) : null}
 
-          <Text numberOfLines={2} style={styles.preview}>
+          <Text numberOfLines={2} style={[styles.preview, darkMode && styles.previewDark]}>
             {previewFromMarkdown(document.content)}
           </Text>
 
           <View style={styles.metaRow}>
-            <Clock3 size={13} color={colors.inkFaint} />
-            <Text style={styles.metaText}>{readMinutes(document.wordCount)} min</Text>
-            <View style={styles.metaDot} />
-            <Text style={styles.metaText}>{formatRelativeDate(document.lastOpenedAt)}</Text>
+            <Clock3 size={13} color={theme.inkFaint} />
+            <Text style={[styles.metaText, darkMode && styles.metaTextDark]}>{readMinutes(document.wordCount)} min</Text>
+            <View style={[styles.metaDot, darkMode && styles.metaDotDark]} />
+            <Text style={[styles.metaText, darkMode && styles.metaTextDark]}>{formatRelativeDate(document.lastOpenedAt)}</Text>
             {progress > 0 ? (
               <>
-                <View style={styles.metaDot} />
-                <Text style={styles.progressText}>{progress}% read</Text>
+                <View style={[styles.metaDot, darkMode && styles.metaDotDark]} />
+                <Text style={[styles.progressText, darkMode && styles.progressTextDark]}>{progress}% read</Text>
               </>
             ) : null}
           </View>
@@ -86,7 +89,7 @@ export function DocumentCard({ document, projectName, onPress, onMenu }: Documen
         onPress={onMenu}
         style={({ pressed }) => [styles.menuButton, pressed && styles.iconPressed]}
       >
-        <MoreHorizontal size={20} color={colors.inkSoft} />
+        <MoreHorizontal size={20} color={theme.inkSoft} />
       </Pressable>
     </View>
   );
@@ -220,5 +223,33 @@ const styles = StyleSheet.create({
     color: colors.moss,
     fontFamily: fonts.semibold,
     fontSize: 11,
+  },
+  cardDark: {
+    backgroundColor: darkColors.paperStrong,
+    borderColor: darkColors.line,
+  },
+  cardDesktop: {
+    width: '48.9%',
+  },
+  titleDark: {
+    color: darkColors.ink,
+  },
+  previewDark: {
+    color: darkColors.inkSoft,
+  },
+  projectLabelDark: {
+    backgroundColor: darkColors.mossSoft,
+  },
+  projectLabelTextDark: {
+    color: darkColors.moss,
+  },
+  metaTextDark: {
+    color: darkColors.inkFaint,
+  },
+  metaDotDark: {
+    backgroundColor: darkColors.lineStrong,
+  },
+  progressTextDark: {
+    color: darkColors.moss,
   },
 });

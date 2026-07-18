@@ -1,0 +1,36 @@
+appId: app.marden.reader
+productName: Marden
+electronVersion: 43.1.1
+asar: true
+npmRebuild: false
+files:
+  - main.cjs
+  - package.json
+extraResources:
+  - from: ../dist
+    to: dist
+directories:
+  output: ../artifacts/macos
+  buildResources: ../assets
+mac:
+  category: public.app-category.productivity
+  icon: ../assets/icon.png
+  identity: null
+  electronLanguages:
+    - en
+  target:
+    - target: dmg
+      arch:
+        - arm64
+  artifactName: Marden-${version}-macOS-${arch}.${ext}
+dmg:
+  title: Marden ${version}
+  iconSize: 104
+  contents:
+    - x: 150
+      y: 185
+      type: file
+    - x: 410
+      y: 185
+      type: link
+      path: /Applications

@@ -13,6 +13,7 @@
 <p align="center">
   <a href="https://github.com/guyoverclocked/marden/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/guyoverclocked/marden?style=flat-square&color=315C4A" /></a>
   <a href="https://github.com/guyoverclocked/marden/releases/latest"><img alt="Download Android APK" src="https://img.shields.io/badge/Android-Download_APK-315C4A?style=flat-square&logo=android&logoColor=white" /></a>
+  <a href="https://github.com/guyoverclocked/marden/releases/latest"><img alt="Download Apple Silicon Mac build" src="https://img.shields.io/badge/macOS-Apple_Silicon-315C4A?style=flat-square&logo=apple&logoColor=white" /></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-D4A85A?style=flat-square" /></a>
   <img alt="Local first" src="https://img.shields.io/badge/Storage-Local_first-E8E2D6?style=flat-square&labelColor=315C4A" />
 </p>
@@ -65,12 +66,18 @@ Marden is useful for saving:
 
 The fastest route is the installable test APK on the [latest GitHub Release](https://github.com/guyoverclocked/marden/releases/latest).
 
-1. Download `Marden-1.0.2.apk` on your Android phone.
+1. Download `Marden-1.0.3.apk` on your Android phone.
 2. Open the downloaded file.
 3. If Android asks, allow installs from that browser or file manager.
 4. Tap **Install**, then open Marden.
 
 Android may warn about apps installed outside Google Play. That is expected for a sideloaded APK. This first APK is debug-certificate signed for direct testing, not Play Store distribution; uninstall it before switching to a future build signed with a different key. The release assets include a SHA-256 checksum so the download can be verified.
+
+### Apple Silicon Mac
+
+Download `Marden-1.0.3-macOS-arm64.dmg` from the [latest GitHub Release](https://github.com/guyoverclocked/marden/releases/latest), open it, and drag Marden to Applications. The desktop layout uses the same local library and reader experience with wider, bounded content and a two-column document library.
+
+This direct test build is not notarized. On first launch, right-click Marden in Applications, choose **Open**, then confirm. The build runs natively on Apple Silicon Macs; it does not target Intel Macs.
 
 ### iPhone
 
@@ -94,7 +101,7 @@ Marden is built with React Native, Expo SDK 57, and TypeScript.
 
 ### Development
 
-Requirements: Node.js 20+ and Expo Go on a physical phone.
+Requirements: Node.js 22.13+ and Expo Go on a physical phone.
 
 ```bash
 git clone https://github.com/guyoverclocked/marden.git
@@ -128,7 +135,17 @@ For a credential-free local test APK on macOS with Java 17 and Android SDK 36 in
 npm run build:apk:local
 ```
 
-The local script names the result from the app version—for this release, `artifacts/Marden-1.0.2.apk`. Production Android and iOS builds are available through `npm run build:android` and `npm run build:ios`.
+The local script names the result from the app version—for this release, `artifacts/Marden-1.0.3.apk`. Production Android and iOS builds are available through `npm run build:android` and `npm run build:ios`.
+
+### Build the Apple Silicon Mac app
+
+On an Apple Silicon Mac with Node.js 22.13 or newer:
+
+```bash
+npm run build:mac
+```
+
+This exports the Expo web target and packages it as `artifacts/macos/Marden-1.0.3-macOS-arm64.dmg`.
 
 ## Contributing
 

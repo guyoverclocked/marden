@@ -2,8 +2,8 @@
   "expo": {
     "name": "Marden",
     "slug": "marden",
-    "version": "1.0.2",
-    "runtimeVersion": "1.0.2",
+    "version": "1.0.3",
+    "runtimeVersion": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -12,14 +12,14 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.marden.reader",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "config": {
         "usesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "app.marden.reader",
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#315C4A",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -30,7 +30,12 @@
     },
     "web": {
       "name": "Marden",
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "output": "single",
+      "display": "standalone",
+      "orientation": "any",
+      "themeColor": "#315C4A",
+      "backgroundColor": "#F5F3ED"
     },
     "plugins": [
       "expo-font",

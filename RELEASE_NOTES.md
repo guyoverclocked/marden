@@ -1,33 +1,19 @@
-# Marden 1.0.0 — First public release
+# Marden 1.0.3 — A more comfortable reader, now on Mac
 
-Marden is a calm, local-first Markdown library for the useful text you want to keep: AI answers, brainstorms, research, plans, technical notes, and more.
+This release makes Marden’s reading preferences consistent throughout the app and adds a dedicated Apple Silicon desktop build.
 
-## What's included
+## What’s new
 
-- Import `.md` and `.markdown` files from your device
-- Write from scratch or paste a response from any AI app
-- Preview Markdown before saving
-- Group documents into colour-coded projects or keep them Unfiled
-- Search, favourite, delete, and resume recent documents
-- Read in light or dark mode with type controls, outline, focus mode, and saved progress
-- View phone-friendly tables and supported Mermaid flowcharts
-- Keep the library on-device with no account, ads, or analytics SDK
+- Reader font-size controls now resize fenced code blocks, line numbers, and table content as well as prose
+- Android’s system Back button now returns from the reader to the library instead of closing Marden
+- A saved dark-reader preference now carries through to the home library
+- The library, reader toolbar, outline, and editor use desktop-friendly widths on larger windows
+- Apple Silicon Mac users can install Marden from the new DMG release asset
+- The library footer now reads “Made with ❤️ by Nambi”
 
-## Install on Android
+## Install
 
-1. Download `Marden-1.0.0.apk` from the Assets section below.
-2. Open the file on your Android phone.
-3. Allow installs from the browser or file manager if Android asks.
-4. Tap **Install**.
+- **Android:** download `Marden-1.0.3.apk`, open it, and approve installation from the browser or file manager if Android asks.
+- **Apple Silicon Mac:** download `Marden-1.0.3-macOS-arm64.dmg`, drag Marden to Applications, then right-click Marden and choose **Open** the first time. This direct test build is not notarized.
 
-This APK is debug-certificate signed for direct sideload testing and is not a Google Play build. If a later release uses a different signing key, uninstall this test build before installing it.
-
-## Verify the APK
-
-SHA-256:
-
-```text
-85d538c000b2c02c923b603d1dde3037a10f7c6b95b95e52ef4cb7442596f079
-```
-
-For iPhone testing, see the [iPhone sideload guide](https://github.com/guyoverclocked/marden/blob/main/IOS_SIDELOAD.md).
+Marden remains local-first: this release does not add accounts, cloud storage, analytics, or syncing.
