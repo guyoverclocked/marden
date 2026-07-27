@@ -287,6 +287,8 @@ export default function App() {
         <EditorScreen
           projects={projects}
           document={editingDocument}
+          darkMode={darkMode}
+          onToggleDarkMode={toggleDarkMode}
           onCancel={closeEditor}
           onSave={saveEditorDocument}
         />
@@ -302,6 +304,19 @@ export default function App() {
               current.map((document) =>
                 document.id === activeDocument.id ? { ...document, readingProgress } : document,
               ),
+            );
+          }}
+          onDocumentContentChange={(content) => {
+            setDocuments((current) =>
+              current.map((document) => {
+                if (document.id !== activeDocument.id) return document;
+                return {
+                  ...document,
+                  content,
+                  wordCount: wordCount(content),
+                  modifiedAt: Date.now(),
+                };
+              }),
             );
           }}
         />

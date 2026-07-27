@@ -19,30 +19,42 @@ import {
   Code2,
   Eye,
   Heading1,
+  Highlighter,
   Italic,
   Link2,
   List,
+  Moon,
   PencilLine,
   Sparkles,
+  Sun,
   X,
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
-import { colors, fonts, radii, shadow } from '../theme';
+import { colors, darkColors, fonts, radii, shadow } from '../theme';
 import { MarkdownDocument, Project } from '../types';
 import { titleFromMarkdown, wordCount } from '../utils/markdown';
 
 type EditorScreenProps = {
   projects: Project[];
   document?: MarkdownDocument | null;
+  darkMode: boolean;
+  onToggleDarkMode: () => void;
   onCancel: () => void;
   onSave: (title: string, content: string, projectId: string | null) => boolean;
 };
 
 type EditorMode = 'edit' | 'preview';
 
-export function EditorScreen({ projects, document, onCancel, onSave }: EditorScreenProps) {
+export function EditorScreen({
+  projects,
+  document,
+  darkMode,
+  onToggleDarkMode,
+  onCancel,
+  onSave,
+}: EditorScreenProps) {
   const { width: windowWidth } = useWindowDimensions();
   const desktop = windowWidth >= 900;
   const editorRef = useRef<TextInput>(null);
@@ -54,6 +66,7 @@ export function EditorScreen({ projects, document, onCancel, onSave }: EditorScr
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const [selection, setSelection] = useState({ start: 0, end: 0 });
   const selectedProject = projects.find((project) => project.id === projectId);
+  const theme = darkMode ? darkColors : colors;
   const count = useMemo(() => wordCount(content), [content]);
   const canSave = content.trim().length > 0;
   const isDirty = document
@@ -98,67 +111,81 @@ export function EditorScreen({ projects, document, onCancel, onSave }: EditorScr
   };
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+    <SafeAreaView edges={['top', 'bottom']} style={[styles.safeArea, darkMode && styles.safeAreaDark]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}
         style={styles.flex}
       >
-        <View style={styles.header}>
+        <View style={[styles.header, darkMode && styles.headerDark]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Cancel editor"
             onPress={requestCancel}
             style={({ pressed }) => [styles.headerAction, pressed && styles.pressed]}
           >
-            <X size={20} color={colors.ink} />
-            <Text style={styles.cancelText}>Cancel</Text>
+            <X size={20} color={theme.ink} />
+            <Text style={[styles.cancelText, darkMode && styles.cancelTextDark]}>Cancel</Text>
           </Pressable>
           <View style={styles.headerCenter}>
-            <Text style={styles.headerEyebrow}>{document ? 'EDIT MARKDOWN' : 'NEW MARKDOWN'}</Text>
-            <Text style={styles.headerTitle}>{document ? 'Edit in Marden' : 'Write in Marden'}</Text>
+            <Text style={[styles.headerEyebrow, darkMode && styles.headerEyebrowDark]}>{document ? 'EDIT MARKDOWN' : 'NEW MARKDOWN'}</Text>
+            <Text style={[styles.headerTitle, darkMode && styles.headerTitleDark]}>{document ? 'Edit in Marden' : 'Write in Marden'}</Text>
           </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={darkMode ? 'Use light writing mode' : 'Use night writing mode'}
+            onPress={onToggleDarkMode}
+            style={({ pressed }) => [styles.themeButton, darkMode && styles.themeButtonDark, pressed && styles.pressed]}
+          >
+            {darkMode ? <Sun size={18} color="#D7E9A2" /> : <Moon size={18} color={colors.inkSoft} />}
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Save Markdown"
             disabled={!canSave}
             onPress={save}
-            style={({ pressed }) => [styles.saveButton, !canSave && styles.saveButtonDisabled, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.saveButton,
+              darkMode && styles.saveButtonDark,
+              !canSave && styles.saveButtonDisabled,
+              darkMode && !canSave && styles.saveButtonDisabledDark,
+              pressed && styles.pressed,
+            ]}
           >
-            <Check size={17} color={canSave ? colors.paper : colors.inkFaint} />
-            <Text style={[styles.saveText, !canSave && styles.saveTextDisabled]}>Save</Text>
+            <Check size={17} color={canSave ? colors.paper : theme.inkFaint} />
+            <Text style={[styles.saveText, darkMode && styles.saveTextDark, !canSave && styles.saveTextDisabled]}>Save</Text>
           </Pressable>
         </View>
 
-        <View style={[styles.segmentedControl, desktop && styles.segmentedControlDesktop]}>
+        <View style={[styles.segmentedControl, darkMode && styles.segmentedControlDark, desktop && styles.segmentedControlDesktop]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Edit Markdown"
             onPress={() => setMode('edit')}
-            style={[styles.segment, mode === 'edit' && styles.segmentActive]}
+            style={[styles.segment, mode === 'edit' && styles.segmentActive, darkMode && mode === 'edit' && styles.segmentActiveDark]}
           >
-            <PencilLine size={15} color={mode === 'edit' ? colors.paper : colors.inkSoft} />
-            <Text style={[styles.segmentText, mode === 'edit' && styles.segmentTextActive]}>Edit</Text>
+            <PencilLine size={15} color={mode === 'edit' ? colors.paper : theme.inkSoft} />
+            <Text style={[styles.segmentText, darkMode && styles.segmentTextDark, mode === 'edit' && styles.segmentTextActive]}>Edit</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Preview Markdown"
             onPress={() => setMode('preview')}
-            style={[styles.segment, mode === 'preview' && styles.segmentActive]}
+            style={[styles.segment, mode === 'preview' && styles.segmentActive, darkMode && mode === 'preview' && styles.segmentActiveDark]}
           >
-            <Eye size={15} color={mode === 'preview' ? colors.paper : colors.inkSoft} />
-            <Text style={[styles.segmentText, mode === 'preview' && styles.segmentTextActive]}>Preview</Text>
+            <Eye size={15} color={mode === 'preview' ? colors.paper : theme.inkSoft} />
+            <Text style={[styles.segmentText, darkMode && styles.segmentTextDark, mode === 'preview' && styles.segmentTextActive]}>Preview</Text>
           </Pressable>
         </View>
 
         {mode === 'edit' ? (
           <View style={[styles.editorLayout, desktop && styles.editorLayoutDesktop]}>
-            <View style={styles.aiHint}>
-              <View style={styles.aiHintIcon}>
-                <Sparkles size={15} color={colors.moss} />
+            <View style={[styles.aiHint, darkMode && styles.aiHintDark]}>
+              <View style={[styles.aiHintIcon, darkMode && styles.aiHintIconDark]}>
+                <Sparkles size={15} color={theme.moss} />
               </View>
-              <Text style={styles.aiHintText}>
-                Paste from any AI app: long-press in the editor, then choose <Text style={styles.aiHintStrong}>Paste</Text>.
+              <Text style={[styles.aiHintText, darkMode && styles.aiHintTextDark]}>
+                Paste from any AI app: long-press in the editor, then choose <Text style={[styles.aiHintStrong, darkMode && styles.aiHintStrongDark]}>Paste</Text>.
               </Text>
             </View>
 
@@ -168,51 +195,55 @@ export function EditorScreen({ projects, document, onCancel, onSave }: EditorScr
                 onChangeText={setTitle}
                 accessibilityLabel="Document title"
                 placeholder="Document title (optional)"
-                placeholderTextColor={colors.inkFaint}
-                selectionColor={colors.moss}
-                style={styles.titleInput}
+                placeholderTextColor={theme.inkFaint}
+                selectionColor={theme.moss}
+                style={[styles.titleInput, darkMode && styles.titleInputDark]}
               />
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Choose project"
                 onPress={() => setProjectPickerOpen(true)}
-                style={({ pressed }) => [styles.projectButton, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.projectButton, darkMode && styles.projectButtonDark, pressed && styles.pressed]}
               >
                 <View style={[styles.projectDot, { backgroundColor: selectedProject?.color || colors.lineStrong }]} />
-                <Text numberOfLines={1} style={styles.projectButtonText}>
+                <Text numberOfLines={1} style={[styles.projectButtonText, darkMode && styles.projectButtonTextDark]}>
                   {selectedProject?.name || 'Unfiled'}
                 </Text>
-                <ChevronDown size={14} color={colors.inkSoft} />
+                <ChevronDown size={14} color={theme.inkSoft} />
               </Pressable>
             </View>
 
             <ScrollView
               horizontal
+              style={styles.formatScroll}
               keyboardShouldPersistTaps="always"
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.formatBar}
             >
-              <FormatButton label="Heading" onPress={() => addLinePrefix('# ', 'Heading')}>
-                <Heading1 size={17} color={colors.inkSoft} />
+              <FormatButton darkMode={darkMode} label="Heading" onPress={() => addLinePrefix('# ', 'Heading')}>
+                <Heading1 size={17} color={theme.inkSoft} />
               </FormatButton>
-              <FormatButton label="Bold" onPress={() => insert('**', '**', 'bold text')}>
-                <Bold size={17} color={colors.inkSoft} />
+              <FormatButton darkMode={darkMode} label="Bold" onPress={() => insert('**', '**', 'bold text')}>
+                <Bold size={17} color={theme.inkSoft} />
               </FormatButton>
-              <FormatButton label="Italic" onPress={() => insert('_', '_', 'emphasis')}>
-                <Italic size={17} color={colors.inkSoft} />
+              <FormatButton darkMode={darkMode} label="Italic" onPress={() => insert('_', '_', 'emphasis')}>
+                <Italic size={17} color={theme.inkSoft} />
               </FormatButton>
-              <FormatButton label="List" onPress={() => addLinePrefix('- ', 'List item')}>
-                <List size={17} color={colors.inkSoft} />
+              <FormatButton darkMode={darkMode} label="Highlight" onPress={() => insert('==', '==', 'important text')}>
+                <Highlighter size={17} color={theme.inkSoft} />
               </FormatButton>
-              <FormatButton label="Link" onPress={() => insert('[', '](https://)', 'link text')}>
-                <Link2 size={17} color={colors.inkSoft} />
+              <FormatButton darkMode={darkMode} label="List" onPress={() => addLinePrefix('- ', 'List item')}>
+                <List size={17} color={theme.inkSoft} />
               </FormatButton>
-              <FormatButton label="Code" onPress={() => insert('```\n', '\n```', 'code')}>
-                <Code2 size={17} color={colors.inkSoft} />
+              <FormatButton darkMode={darkMode} label="Link" onPress={() => insert('[', '](https://)', 'link text')}>
+                <Link2 size={17} color={theme.inkSoft} />
+              </FormatButton>
+              <FormatButton darkMode={darkMode} label="Code" onPress={() => insert('```\n', '\n```', 'code')}>
+                <Code2 size={17} color={theme.inkSoft} />
               </FormatButton>
             </ScrollView>
 
-            <View style={styles.editorCard}>
+            <View style={[styles.editorCard, darkMode && styles.editorCardDark]}>
               <TextInput
                 ref={editorRef}
                 autoCapitalize="sentences"
@@ -222,7 +253,7 @@ export function EditorScreen({ projects, document, onCancel, onSave }: EditorScr
                 onChangeText={setContent}
                 onSelectionChange={(event) => setSelection(event.nativeEvent.selection)}
                 placeholder={'# Start writing\n\nType Markdown here, or paste a response from your favourite AI app…'}
-                placeholderTextColor="#929A94"
+                placeholderTextColor={darkMode ? '#829087' : '#929A94'}
                 selection={selection}
                 selectionColor={colors.lime}
                 textAlignVertical="top"
@@ -241,20 +272,20 @@ export function EditorScreen({ projects, document, onCancel, onSave }: EditorScr
           >
             <View style={styles.previewMeta}>
               <View>
-                <Text style={styles.previewEyebrow}>LIVE PREVIEW</Text>
-                <Text style={styles.previewTitle}>{title.trim() || titleFromMarkdown(content, 'Untitled.md')}</Text>
+                <Text style={[styles.previewEyebrow, darkMode && styles.previewEyebrowDark]}>LIVE PREVIEW</Text>
+                <Text style={[styles.previewTitle, darkMode && styles.previewTitleDark]}>{title.trim() || titleFromMarkdown(content, 'Untitled.md')}</Text>
               </View>
-              <View style={styles.wordBadge}>
-                <Text style={styles.wordBadgeText}>{count} words</Text>
+              <View style={[styles.wordBadge, darkMode && styles.wordBadgeDark]}>
+                <Text style={[styles.wordBadgeText, darkMode && styles.wordBadgeTextDark]}>{count} words</Text>
               </View>
             </View>
             {content.trim() ? (
-              <MarkdownRenderer content={content} textScale="comfortable" />
+              <MarkdownRenderer content={content} textScale="comfortable" darkMode={darkMode} />
             ) : (
-              <View style={styles.emptyPreview}>
-                <Eye size={24} color={colors.moss} />
-                <Text style={styles.emptyPreviewTitle}>Your preview will appear here</Text>
-                <Text style={styles.emptyPreviewText}>Switch to Edit and add or paste some Markdown.</Text>
+              <View style={[styles.emptyPreview, darkMode && styles.emptyPreviewDark]}>
+                <Eye size={24} color={theme.moss} />
+                <Text style={[styles.emptyPreviewTitle, darkMode && styles.emptyPreviewTitleDark]}>Your preview will appear here</Text>
+                <Text style={[styles.emptyPreviewText, darkMode && styles.emptyPreviewTextDark]}>Switch to Edit and add or paste some Markdown.</Text>
               </View>
             )}
           </ScrollView>
@@ -267,14 +298,14 @@ export function EditorScreen({ projects, document, onCancel, onSave }: EditorScr
         visible={discardConfirmOpen}
         onRequestClose={() => setDiscardConfirmOpen(false)}
       >
-        <View style={styles.discardModalRoot}>
+          <View style={styles.discardModalRoot}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setDiscardConfirmOpen(false)} />
-          <View style={styles.discardCard}>
-            <View style={styles.discardIcon}>
+          <View style={[styles.discardCard, darkMode && styles.discardCardDark]}>
+            <View style={[styles.discardIcon, darkMode && styles.discardIconDark]}>
               <X size={22} color={colors.error} />
             </View>
-            <Text style={styles.discardTitle}>{document ? 'Discard your changes?' : 'Discard this draft?'}</Text>
-            <Text style={styles.discardBody}>{document ? 'The saved document will stay unchanged.' : 'Your unsaved Markdown will be lost.'}</Text>
+            <Text style={[styles.discardTitle, darkMode && styles.discardTitleDark]}>{document ? 'Discard your changes?' : 'Discard this draft?'}</Text>
+            <Text style={[styles.discardBody, darkMode && styles.discardBodyDark]}>{document ? 'The saved document will stay unchanged.' : 'Your unsaved Markdown will be lost.'}</Text>
             <View style={styles.discardActions}>
               <Pressable
                 accessibilityRole="button"
@@ -282,7 +313,7 @@ export function EditorScreen({ projects, document, onCancel, onSave }: EditorScr
                 onPress={() => setDiscardConfirmOpen(false)}
                 style={({ pressed }) => [styles.keepWritingButton, pressed && styles.pressed]}
               >
-                <Text style={styles.keepWritingText}>Keep writing</Text>
+                <Text style={[styles.keepWritingText, darkMode && styles.keepWritingTextDark]}>Keep writing</Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -308,14 +339,15 @@ export function EditorScreen({ projects, document, onCancel, onSave }: EditorScr
       >
         <View style={styles.modalRoot}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setProjectPickerOpen(false)} />
-          <SafeAreaView edges={['bottom']} style={styles.projectSheet}>
+          <SafeAreaView edges={['bottom']} style={[styles.projectSheet, darkMode && styles.projectSheetDark]}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetEyebrow}>ORGANIZE</Text>
-            <Text style={styles.sheetTitle}>Choose a project</Text>
+            <Text style={[styles.sheetEyebrow, darkMode && styles.sheetEyebrowDark]}>ORGANIZE</Text>
+            <Text style={[styles.sheetTitle, darkMode && styles.sheetTitleDark]}>Choose a project</Text>
             <ProjectChoice
               name="Unfiled"
               color={colors.lineStrong}
               selected={projectId === null}
+              darkMode={darkMode}
               onPress={() => {
                 setProjectId(null);
                 setProjectPickerOpen(false);
@@ -327,6 +359,7 @@ export function EditorScreen({ projects, document, onCancel, onSave }: EditorScr
                 name={project.name}
                 color={project.color}
                 selected={projectId === project.id}
+                darkMode={darkMode}
                 onPress={() => {
                   setProjectId(project.id);
                   setProjectPickerOpen(false);
@@ -340,16 +373,26 @@ export function EditorScreen({ projects, document, onCancel, onSave }: EditorScr
   );
 }
 
-function FormatButton({ label, onPress, children }: { label: string; onPress: () => void; children: React.ReactNode }) {
+function FormatButton({
+  label,
+  onPress,
+  children,
+  darkMode,
+}: {
+  label: string;
+  onPress: () => void;
+  children: React.ReactNode;
+  darkMode: boolean;
+}) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`Insert ${label}`}
       onPress={onPress}
-      style={({ pressed }) => [styles.formatButton, pressed && styles.formatButtonPressed]}
+      style={({ pressed }) => [styles.formatButton, darkMode && styles.formatButtonDark, pressed && styles.formatButtonPressed]}
     >
       {children}
-      <Text style={styles.formatLabel}>{label}</Text>
+      <Text style={[styles.formatLabel, darkMode && styles.formatLabelDark]}>{label}</Text>
     </Pressable>
   );
 }
@@ -358,11 +401,13 @@ function ProjectChoice({
   name,
   color,
   selected,
+  darkMode,
   onPress,
 }: {
   name: string;
   color: string;
   selected: boolean;
+  darkMode: boolean;
   onPress: () => void;
 }) {
   return (
@@ -370,11 +415,11 @@ function ProjectChoice({
       accessibilityRole="button"
       accessibilityLabel={`Choose ${name}`}
       onPress={onPress}
-      style={({ pressed }) => [styles.projectChoice, pressed && styles.projectChoicePressed]}
+      style={({ pressed }) => [styles.projectChoice, darkMode && styles.projectChoiceDark, pressed && styles.projectChoicePressed]}
     >
       <View style={[styles.choiceDot, { backgroundColor: color }]} />
-      <Text style={styles.choiceName}>{name}</Text>
-      {selected ? <Check size={18} color={colors.moss} /> : null}
+      <Text style={[styles.choiceName, darkMode && styles.choiceNameDark]}>{name}</Text>
+      {selected ? <Check size={18} color={darkMode ? darkColors.moss : colors.moss} /> : null}
     </Pressable>
   );
 }
@@ -382,6 +427,7 @@ function ProjectChoice({
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   safeArea: { flex: 1, backgroundColor: colors.canvas },
+  safeAreaDark: { backgroundColor: darkColors.canvas },
   header: {
     height: 68,
     flexDirection: 'row',
@@ -391,6 +437,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.line,
     backgroundColor: colors.paper,
   },
+  headerDark: { borderBottomColor: darkColors.line, backgroundColor: darkColors.paper },
   headerAction: {
     width: 78,
     flexDirection: 'row',
@@ -399,9 +446,21 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.55, transform: [{ scale: 0.97 }] },
   cancelText: { color: colors.inkSoft, fontFamily: fonts.medium, fontSize: 11 },
+  cancelTextDark: { color: darkColors.inkSoft },
   headerCenter: { flex: 1, alignItems: 'center' },
   headerEyebrow: { color: colors.moss, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 1.15 },
+  headerEyebrowDark: { color: darkColors.moss },
   headerTitle: { marginTop: 2, color: colors.ink, fontFamily: fonts.semibold, fontSize: 14 },
+  headerTitleDark: { color: darkColors.ink },
+  themeButton: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 7,
+    borderRadius: 19,
+  },
+  themeButtonDark: { backgroundColor: darkColors.mossSoft },
   saveButton: {
     minWidth: 78,
     height: 38,
@@ -413,7 +472,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.moss,
   },
   saveButtonDisabled: { backgroundColor: colors.line },
+  saveButtonDark: { backgroundColor: darkColors.moss },
+  saveButtonDisabledDark: { backgroundColor: darkColors.line },
   saveText: { color: colors.paper, fontFamily: fonts.semibold, fontSize: 11 },
+  saveTextDark: { color: darkColors.canvas },
   saveTextDisabled: { color: colors.inkFaint },
   segmentedControl: {
     height: 45,
@@ -425,6 +487,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     backgroundColor: colors.sand,
   },
+  segmentedControlDark: { backgroundColor: darkColors.sand },
   segmentedControlDesktop: {
     width: '100%',
     maxWidth: 1120,
@@ -440,7 +503,9 @@ const styles = StyleSheet.create({
     borderRadius: 11,
   },
   segmentActive: { backgroundColor: colors.moss },
+  segmentActiveDark: { backgroundColor: darkColors.mossDark },
   segmentText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 11 },
+  segmentTextDark: { color: darkColors.inkSoft },
   segmentTextActive: { color: colors.paper },
   editorLayout: { flex: 1, paddingHorizontal: 20 },
   editorLayoutDesktop: { width: '100%', maxWidth: 1120, alignSelf: 'center', paddingHorizontal: 0 },
@@ -454,6 +519,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.sm,
     backgroundColor: '#E9F0E8',
   },
+  aiHintDark: { backgroundColor: darkColors.mossSoft },
   aiHintIcon: {
     width: 29,
     height: 29,
@@ -462,8 +528,11 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     backgroundColor: colors.paperStrong,
   },
+  aiHintIconDark: { backgroundColor: darkColors.paperStrong },
   aiHintText: { flex: 1, color: colors.inkSoft, fontFamily: fonts.regular, fontSize: 10.5, lineHeight: 15 },
+  aiHintTextDark: { color: darkColors.inkSoft },
   aiHintStrong: { color: colors.moss, fontFamily: fonts.semibold },
+  aiHintStrongDark: { color: darkColors.moss },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 13 },
   titleInput: {
     flex: 1,
@@ -477,6 +546,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.medium,
     fontSize: 13,
   },
+  titleInputDark: { borderColor: darkColors.line, color: darkColors.ink, backgroundColor: darkColors.paperStrong },
   projectButton: {
     maxWidth: 135,
     height: 45,
@@ -489,9 +559,14 @@ const styles = StyleSheet.create({
     borderRadius: radii.sm,
     backgroundColor: colors.paperStrong,
   },
+  projectButtonDark: { borderColor: darkColors.line, backgroundColor: darkColors.paperStrong },
   projectDot: { width: 8, height: 8, borderRadius: 4 },
   projectButtonText: { flexShrink: 1, color: colors.inkSoft, fontFamily: fonts.medium, fontSize: 10 },
+  projectButtonTextDark: { color: darkColors.inkSoft },
   formatBar: { gap: 7, paddingVertical: 11 },
+  // React Native Web's horizontal ScrollView otherwise grows to fill the
+  // column, leaving an empty band above the writing card on desktop.
+  formatScroll: { flexGrow: 0, flexShrink: 0 },
   formatButton: {
     height: 37,
     flexDirection: 'row',
@@ -503,8 +578,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: colors.paperStrong,
   },
+  formatButtonDark: { borderColor: darkColors.line, backgroundColor: darkColors.paperStrong },
   formatButtonPressed: { backgroundColor: colors.mossSoft, borderColor: colors.mossSoft },
   formatLabel: { color: colors.inkSoft, fontFamily: fonts.medium, fontSize: 9.5 },
+  formatLabelDark: { color: darkColors.inkSoft },
   editorCard: {
     flex: 1,
     minHeight: 220,
@@ -516,6 +593,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...shadow.card,
   },
+  editorCardDark: { borderColor: '#39473E', backgroundColor: '#101512' },
   editorInput: {
     flex: 1,
     padding: 17,
@@ -538,9 +616,13 @@ const styles = StyleSheet.create({
   previewScrollDesktop: { width: '100%', maxWidth: 760, alignSelf: 'center', paddingHorizontal: 20 },
   previewMeta: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 13 },
   previewEyebrow: { color: colors.moss, fontFamily: fonts.semibold, fontSize: 8, letterSpacing: 1.2 },
+  previewEyebrowDark: { color: darkColors.moss },
   previewTitle: { marginTop: 4, color: colors.ink, fontFamily: fonts.semibold, fontSize: 18 },
+  previewTitleDark: { color: darkColors.ink },
   wordBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: radii.pill, backgroundColor: colors.mossSoft },
+  wordBadgeDark: { backgroundColor: darkColors.mossSoft },
   wordBadgeText: { color: colors.moss, fontFamily: fonts.semibold, fontSize: 9 },
+  wordBadgeTextDark: { color: darkColors.moss },
   emptyPreview: {
     minHeight: 260,
     alignItems: 'center',
@@ -551,8 +633,11 @@ const styles = StyleSheet.create({
     borderRadius: radii.lg,
     backgroundColor: colors.paperStrong,
   },
+  emptyPreviewDark: { borderColor: darkColors.line, backgroundColor: darkColors.paperStrong },
   emptyPreviewTitle: { marginTop: 13, color: colors.ink, fontFamily: fonts.semibold, fontSize: 15 },
+  emptyPreviewTitleDark: { color: darkColors.ink },
   emptyPreviewText: { marginTop: 6, color: colors.inkSoft, fontFamily: fonts.regular, fontSize: 12, textAlign: 'center' },
+  emptyPreviewTextDark: { color: darkColors.inkSoft },
   modalRoot: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(20,24,21,0.34)' },
   projectSheet: {
     maxHeight: '72%',
@@ -562,9 +647,12 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 30,
     backgroundColor: colors.paper,
   },
+  projectSheetDark: { backgroundColor: darkColors.paper },
   sheetHandle: { width: 38, height: 4, alignSelf: 'center', marginBottom: 18, borderRadius: 2, backgroundColor: colors.lineStrong },
   sheetEyebrow: { color: colors.moss, fontFamily: fonts.semibold, fontSize: 8, letterSpacing: 1.2 },
+  sheetEyebrowDark: { color: darkColors.moss },
   sheetTitle: { marginTop: 4, marginBottom: 16, color: colors.ink, fontFamily: fonts.semibold, fontSize: 23 },
+  sheetTitleDark: { color: darkColors.ink },
   projectChoice: {
     minHeight: 55,
     flexDirection: 'row',
@@ -573,9 +661,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.line,
   },
+  projectChoiceDark: { borderBottomColor: darkColors.line },
   projectChoicePressed: { backgroundColor: colors.mossSoft },
   choiceDot: { width: 12, height: 12, borderRadius: 6, marginRight: 11 },
   choiceName: { flex: 1, color: colors.ink, fontFamily: fonts.medium, fontSize: 14 },
+  choiceNameDark: { color: darkColors.ink },
   discardModalRoot: {
     flex: 1,
     alignItems: 'center',
@@ -591,6 +681,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.paperStrong,
     ...shadow.floating,
   },
+  discardCardDark: { backgroundColor: darkColors.paperStrong },
   discardIcon: {
     width: 46,
     height: 46,
@@ -600,12 +691,14 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     backgroundColor: '#F5E5E2',
   },
+  discardIconDark: { backgroundColor: '#4A2926' },
   discardTitle: {
     color: colors.ink,
     fontFamily: fonts.semibold,
     fontSize: 20,
     letterSpacing: -0.45,
   },
+  discardTitleDark: { color: darkColors.ink },
   discardBody: {
     marginTop: 6,
     color: colors.inkSoft,
@@ -613,6 +706,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
   },
+  discardBodyDark: { color: darkColors.inkSoft },
   discardActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -629,6 +723,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semibold,
     fontSize: 11,
   },
+  keepWritingTextDark: { color: darkColors.inkSoft },
   discardButton: {
     height: 43,
     justifyContent: 'center',

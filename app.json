@@ -2,8 +2,8 @@
   "expo": {
     "name": "Marden",
     "slug": "marden",
-    "version": "1.0.3",
-    "runtimeVersion": "1.0.3",
+    "version": "1.0.4",
+    "runtimeVersion": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -12,14 +12,14 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.marden.reader",
-      "buildNumber": "4",
+      "buildNumber": "5",
       "config": {
         "usesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "app.marden.reader",
-      "versionCode": 4,
+      "versionCode": 5,
       "adaptiveIcon": {
         "backgroundColor": "#315C4A",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -52,7 +52,13 @@
           }
         }
       ],
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "react-native-enriched-markdown",
+        {
+          "enableMath": false
+        }
+      ]
     ],
     "extra": {
       "privacy": "Files and library metadata stay on the device."

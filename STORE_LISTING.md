@@ -43,4 +43,4 @@ Markdown, reader, notes, documents, editor, AI, Mermaid, projects, offline, writ
 - Confirm the final bundle IDs and store ownership
 - Complete App Store privacy answers and Google Play Data safety using the policy above
 - Run the preview APK on at least one physical Android device
-- Run the Expo Go or development build on at least one physical iPhone
+- Run a development or preview build on at least one physical iPhone

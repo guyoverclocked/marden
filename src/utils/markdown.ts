@@ -26,6 +26,44 @@ export const wordCount = (content: string) => {
   return plainText ? plainText.split(/\s+/).length : 0;
 };
 
+/**
+ * Converts a Markdown document to readable text for the reader's copy action.
+ * It preserves code, list markers, and table rows while dropping presentation
+ * syntax and link destinations.
+ */
+export const plainTextFromMarkdown = (content: string) =>
+  content
+    .replace(/```[^\n]*\n([\s\S]*?)```/g, '$1')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^\s*>\s?/gm, '')
+    .replace(/^(\s*)[-+*]\s+/gm, '$1• ')
+    .replace(/^(\s*)(\d+)\.\s+/gm, '$1$2. ')
+    .replace(/^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$/gm, '')
+    .replace(/\|/g, '\t')
+    .replace(/==([^=\n]+)==/g, '$1')
+    .replace(/~~|\*\*|__|[*_`]/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+/**
+ * Persists a task toggle emitted by Enriched Markdown's GFM task-list UI.
+ * The index is the renderer's document-order, zero-based task index.
+ */
+export const setTaskListItemChecked = (content: string, targetIndex: number, checked: boolean) => {
+  let taskIndex = -1;
+  let updated = false;
+  const next = content.replace(/^(\s*[-+*]\s+\[)([ xX])(\]\s+)/gm, (match, start, _state, end) => {
+    taskIndex += 1;
+    if (taskIndex !== targetIndex) return match;
+    updated = true;
+    return start + (checked ? 'x' : ' ') + end;
+  });
+
+  return updated ? next : content;
+};
+
 export const readMinutes = (count: number) => Math.max(1, Math.ceil(count / 220));
 
 export const previewFromMarkdown = (content: string) => {

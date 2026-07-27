@@ -11,11 +11,14 @@ import {
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import * as Clipboard from 'expo-clipboard';
 import { StatusBar } from 'expo-status-bar';
 import Storage from '@react-native-async-storage/async-storage';
 import {
   ALargeSmall,
   ChevronLeft,
+  Copy,
+  Highlighter,
   ListTree,
   Maximize2,
   Minimize2,
@@ -29,7 +32,13 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { colors, fonts, radii, shadow } from '../theme';
 import { MarkdownDocument, TextScale } from '../types';
-import { extractHeadings, formatRelativeDate, readMinutes } from '../utils/markdown';
+import {
+  extractHeadings,
+  formatRelativeDate,
+  plainTextFromMarkdown,
+  readMinutes,
+  setTaskListItemChecked,
+} from '../utils/markdown';
 
 type ReaderScreenProps = {
   document: MarkdownDocument;
@@ -38,6 +47,7 @@ type ReaderScreenProps = {
   onToggleDarkMode: () => void;
   onToggleFavorite: () => void;
   onProgress: (progress: number) => void;
+  onDocumentContentChange: (content: string) => void;
 };
 
 const scales: TextScale[] = ['compact', 'comfortable', 'large'];
@@ -50,6 +60,7 @@ export function ReaderScreen({
   onToggleDarkMode,
   onToggleFavorite,
   onProgress,
+  onDocumentContentChange,
 }: ReaderScreenProps) {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
@@ -61,11 +72,17 @@ export function ReaderScreen({
   const liveProgressRef = useRef(document.readingProgress);
   const persistedProgressRef = useRef(document.readingProgress);
   const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const visualProgressFrameRef = useRef<number | null>(null);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const highlightTipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [progress, setProgress] = useState(document.readingProgress);
   const [textScale, setTextScale] = useState<TextScale>('comfortable');
   const [focusMode, setFocusMode] = useState(false);
   const [outlineOpen, setOutlineOpen] = useState(false);
+  const [highlightTipVisible, setHighlightTipVisible] = useState(false);
+  const [copied, setCopied] = useState(false);
   const headings = useMemo(() => extractHeadings(document.content), [document.content]);
+  const contentWidth = desktop ? Math.min(1180, Math.max(1, windowWidth - 48)) : Math.min(720, Math.max(1, windowWidth - 46));
 
   useEffect(() => {
     restoredRef.current = false;
@@ -84,6 +101,9 @@ export function ReaderScreen({
   useEffect(
     () => () => {
       if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      if (highlightTipTimerRef.current) clearTimeout(highlightTipTimerRef.current);
+      if (visualProgressFrameRef.current !== null) cancelAnimationFrame(visualProgressFrameRef.current);
     },
     [],
   );
@@ -109,11 +129,17 @@ export function ReaderScreen({
     return Math.min(1, Math.max(0, contentOffset.y / available));
   };
 
-  // Keep continuous scrolling off React's render path. The reader used to
-  // update both local state and the entire library for every scroll event,
-  // which forced large Markdown documents to reconcile while moving.
+  // The visual indicator follows every scroll input, including mouse wheels
+  // on macOS. A frame throttle keeps Markdown reconciliation out of the
+  // scroll path, while persistence remains debounced below.
   const trackScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     liveProgressRef.current = progressFromEvent(event);
+    if (visualProgressFrameRef.current !== null) return;
+    visualProgressFrameRef.current = requestAnimationFrame(() => {
+      visualProgressFrameRef.current = null;
+      const next = liveProgressRef.current;
+      setProgress((current) => (Math.abs(current - next) >= 0.001 ? next : current));
+    });
   };
 
   const commitProgress = (event?: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -168,6 +194,34 @@ export function ReaderScreen({
   const toggleDarkMode = () => {
     onToggleDarkMode();
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const showHighlightHelp = () => {
+    setHighlightTipVisible(true);
+    if (highlightTipTimerRef.current) clearTimeout(highlightTipTimerRef.current);
+    highlightTipTimerRef.current = setTimeout(() => {
+      highlightTipTimerRef.current = null;
+      setHighlightTipVisible(false);
+    }, 3600);
+    void Haptics.selectionAsync();
+  };
+
+  const copyDocumentText = async () => {
+    try {
+      const didCopy = await Clipboard.setStringAsync(plainTextFromMarkdown(document.content));
+      if (!didCopy) return;
+      setCopied(true);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => {
+        copiedTimerRef.current = null;
+        setCopied(false);
+      }, 1400);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      // On web, clipboard access can be denied by the embedding browser. Keep
+      // the control quiet rather than falsely confirming a completed copy.
+      setCopied(false);
+    }
   };
 
   const jumpToHeading = (sourceOffset: number) => {
@@ -237,14 +291,14 @@ export function ReaderScreen({
           viewportHeightRef.current = event.nativeEvent.layout.height;
           restorePosition();
         }}
-        onScroll={trackScroll}
+        onScroll={scheduleProgressCommit}
         onScrollEndDrag={scheduleProgressCommit}
         onMomentumScrollBegin={beginMomentum}
         onMomentumScrollEnd={finishMomentum}
         scrollEventThrottle={100}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.paper}>
+        <View style={[styles.paper, { maxWidth: contentWidth }]}>
           <View style={styles.readerMeta}>
             <View style={[styles.fileBadge, darkMode && styles.fileBadgeDark]}>
               <Text style={[styles.fileBadgeText, darkMode && styles.fileBadgeTextDark]}>MARKDOWN</Text>
@@ -257,7 +311,18 @@ export function ReaderScreen({
               Opened {formatRelativeDate(document.lastOpenedAt).toLowerCase()}
             </Text>
           </View>
-          <MarkdownRenderer content={document.content} textScale={textScale} darkMode={darkMode} />
+          <MarkdownRenderer
+            content={document.content}
+            textScale={textScale}
+            darkMode={darkMode}
+            selectable
+            wideLayout={desktop}
+            availableWidth={contentWidth}
+            onTaskListItemPress={({ index, checked }) => {
+              const nextContent = setTaskListItemChecked(document.content, index, checked);
+              if (nextContent !== document.content) onDocumentContentChange(nextContent);
+            }}
+          />
           <View style={styles.endMark}>
             <View style={[styles.endLine, darkMode && styles.endLineDark]} />
             <Text style={[styles.endGlyph, darkMode && styles.endGlyphDark]}>M↓</Text>
@@ -300,11 +365,27 @@ export function ReaderScreen({
             {darkMode ? <Sun size={19} color="#D7E9A2" /> : <Moon size={19} color={colors.inkSoft} />}
           </ReaderTool>
           <View style={styles.toolbarDivider} />
+          <ReaderTool label="Highlight" darkMode={darkMode} onPress={showHighlightHelp}>
+            <Highlighter size={19} color={darkMode ? '#BAC4BD' : colors.inkSoft} />
+          </ReaderTool>
+          <View style={styles.toolbarDivider} />
+          <ReaderTool label={copied ? 'Copied' : 'Copy'} darkMode={darkMode} onPress={() => void copyDocumentText()}>
+            <Copy size={18} color={copied ? (darkMode ? '#D7E9A2' : colors.moss) : darkMode ? '#BAC4BD' : colors.inkSoft} />
+          </ReaderTool>
+          <View style={styles.toolbarDivider} />
           <ReaderTool label="Focus" darkMode={darkMode} onPress={toggleFocus}>
             <Maximize2 size={19} color={darkMode ? '#BAC4BD' : colors.inkSoft} />
           </ReaderTool>
         </View>
       )}
+
+      {!focusMode && highlightTipVisible ? (
+        <View pointerEvents="none" style={[styles.highlightHint, darkMode && styles.highlightHintDark, { bottom: insets.bottom + 93 }]}>
+          <Text style={[styles.highlightHintText, darkMode && styles.highlightHintTextDark]}>
+            Highlights stay with your file: add ==important text== in Edit.
+          </Text>
+        </View>
+      ) : null}
 
       <Modal animationType="slide" transparent visible={outlineOpen} onRequestClose={() => setOutlineOpen(false)}>
         <View style={styles.modalRoot}>
@@ -471,7 +552,6 @@ const styles = StyleSheet.create({
   },
   paper: {
     width: '100%',
-    maxWidth: 720,
     alignSelf: 'center',
   },
   readerMeta: {
@@ -560,10 +640,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(26,31,28,0.98)',
   },
   toolbarShellDesktop: {
-    width: 520,
+    width: 690,
     left: '50%',
     right: undefined,
-    transform: [{ translateX: -260 }],
+    transform: [{ translateX: -345 }],
   },
   toolButton: {
     flex: 1,
@@ -582,7 +662,7 @@ const styles = StyleSheet.create({
   toolLabel: {
     color: colors.inkSoft,
     fontFamily: fonts.medium,
-    fontSize: 8.5,
+    fontSize: 8,
   },
   toolLabelDark: {
     color: '#B3BDB6',
@@ -591,6 +671,30 @@ const styles = StyleSheet.create({
     width: 1,
     height: 26,
     backgroundColor: 'rgba(28,33,30,0.08)',
+  },
+  highlightHint: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    alignSelf: 'center',
+    maxWidth: 430,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderRadius: radii.pill,
+    backgroundColor: '#F2E9A9',
+    ...shadow.card,
+  },
+  highlightHintDark: {
+    backgroundColor: '#5A5426',
+  },
+  highlightHintText: {
+    color: '#4B421B',
+    fontFamily: fonts.medium,
+    fontSize: 10.5,
+    textAlign: 'center',
+  },
+  highlightHintTextDark: {
+    color: '#FAF1C6',
   },
   exitFocus: {
     position: 'absolute',

@@ -27,6 +27,10 @@ Marden renders the pieces that make Markdown useful, not just the paragraphs:
 - Clear heading hierarchy
 - **Strong**, *emphasized*, and ~~struck~~ text
 - Task lists and nested ideas
+  1. Ordered steps stay aligned
+     - Supporting points nest cleanly below them
+  2. Mixed lists remain easy to scan
+- [ ] Tap a task in the reader to complete it
 - Tables, links, quotes, and code
 - Mermaid flowcharts rendered as native diagrams
 

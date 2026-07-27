@@ -56,7 +56,7 @@ Marden is useful for saving:
 | --- | --- |
 | **Capture without friction** | Import `.md` and `.markdown` files, or open the built-in editor to type or paste content from another app. Preview the result before saving. |
 | **Organize your way** | Group documents into colour-coded projects, keep loose thoughts in Unfiled, search the library, favourite important files, and jump back into recent reading. |
-| **Make Markdown feel native** | Read headings, quotes, lists, links, code, phone-friendly tables, and supported Mermaid flowcharts in a polished mobile layout. |
+| **Make Markdown feel native** | The maintained Enriched Markdown engine handles CommonMark, GFM tables and task lists, nested lists, links, code, standard double-equals highlights, selection, and rich copy; Marden also keeps its native Mermaid flowcharts. |
 | **Stay comfortable for longer** | Switch between light and dark themes, adjust type, open a document outline, use focus mode, and resume from saved reading progress. |
 | **Keep your writing private** | No account, ads, analytics SDK, or developer-operated content service. Your library is stored in Marden's private app directory on your device. |
 
@@ -66,7 +66,7 @@ Marden is useful for saving:
 
 The fastest route is the installable test APK on the [latest GitHub Release](https://github.com/guyoverclocked/marden/releases/latest).
 
-1. Download `Marden-1.0.3.apk` on your Android phone.
+1. Download `Marden-1.0.4.apk` on your Android phone.
 2. Open the downloaded file.
 3. If Android asks, allow installs from that browser or file manager.
 4. Tap **Install**, then open Marden.
@@ -75,7 +75,7 @@ Android may warn about apps installed outside Google Play. That is expected for 
 
 ### Apple Silicon Mac
 
-Download `Marden-1.0.3-macOS-arm64.dmg` from the [latest GitHub Release](https://github.com/guyoverclocked/marden/releases/latest), open it, and drag Marden to Applications. The desktop layout uses the same local library and reader experience with wider, bounded content and a two-column document library.
+Download `Marden-1.0.4-macOS-arm64.dmg` from the [latest GitHub Release](https://github.com/guyoverclocked/marden/releases/latest), open it, and drag Marden to Applications. The desktop layout uses the same local library and reader experience with wider, bounded content and a two-column document library.
 
 This direct test build is not notarized. On first launch, right-click Marden in Applications, choose **Open**, then confirm. The build runs natively on Apple Silicon Macs; it does not target Intel Macs.
 
@@ -83,7 +83,7 @@ This direct test build is not notarized. On first launch, right-click Marden in 
 
 Apple requires every iPhone build to be signed for the device, so this repository cannot provide one universal IPA in the way Android can provide an APK. Marden supports three practical test routes:
 
-- **Expo Go** — quickest test, no paid Apple membership
+- **Expo development build** — a signed development install with fast refresh
 - **Xcode Personal Team** — a real Marden app icon, signed with a free Apple Account
 - **EAS internal build** — a self-contained sideload for registered devices with a paid Apple Developer membership
 
@@ -101,16 +101,16 @@ Marden is built with React Native, Expo SDK 57, and TypeScript.
 
 ### Development
 
-Requirements: Node.js 22.13+ and Expo Go on a physical phone.
+Requirements: Node.js 22.13+ and an Expo development build on a physical phone. The maintained Markdown renderer includes native code, so it cannot run in Expo Go.
 
 ```bash
 git clone https://github.com/guyoverclocked/marden.git
 cd marden
 npm install
-npm start
+npm run start:dev
 ```
 
-Scan the QR code with Expo Go while the computer and phone are on the same network. If LAN discovery is blocked, use `npx expo start --go --tunnel`.
+Install a development build first, then start Metro with `npm run start:dev` while the computer and phone are on the same network. If LAN discovery is blocked, use `npx expo start --dev-client --tunnel`.
 
 ### Verify the project
 
@@ -135,7 +135,7 @@ For a credential-free local test APK on macOS with Java 17 and Android SDK 36 in
 npm run build:apk:local
 ```
 
-The local script names the result from the app version—for this release, `artifacts/Marden-1.0.3.apk`. Production Android and iOS builds are available through `npm run build:android` and `npm run build:ios`.
+The local script names the result from the app version—for this release, `artifacts/Marden-1.0.4.apk`. Production Android and iOS builds are available through `npm run build:android` and `npm run build:ios`.
 
 ### Build the Apple Silicon Mac app
 
@@ -145,7 +145,7 @@ On an Apple Silicon Mac with Node.js 22.13 or newer:
 npm run build:mac
 ```
 
-This exports the Expo web target and packages it as `artifacts/macos/Marden-1.0.3-macOS-arm64.dmg`.
+This exports the Expo web target and packages it as `artifacts/macos/Marden-1.0.4-macOS-arm64.dmg`.
 
 ## Contributing
 
