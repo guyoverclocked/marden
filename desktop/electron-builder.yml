@@ -45,7 +45,6 @@ win:
     - target: nsis
       arch:
         - x64
-        - arm64
   artifactName: Marden-${version}-Windows-${arch}.${ext}
 nsis:
   oneClick: false
