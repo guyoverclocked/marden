@@ -32,11 +32,6 @@ mac:
     - target: dmg
       arch:
         - arm64
-        - x64
-    - target: zip
-      arch:
-        - arm64
-        - x64
   artifactName: Marden-${version}-macOS-${arch}.${ext}
 # ── Windows ────────────────────────────────────────────
 win:
@@ -45,11 +40,13 @@ win:
     - target: nsis
       arch:
         - x64
+        - arm64
   artifactName: Marden-${version}-Windows-${arch}.${ext}
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   perMachine: false
+  buildUniversalInstaller: true
 # ── Auto‑update (electron‑builder publishes metadata) ──
 publish:
   provider: github
