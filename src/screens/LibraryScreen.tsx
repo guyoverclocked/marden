@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
   Modal,
   Pressable,
   ScrollView,
@@ -11,7 +12,11 @@ import {
   View,
 } from 'react-native';
 import {
+  ArchiveRestore,
   Check,
+  ClipboardPaste,
+  Cloud,
+  Download,
   FilePlus2,
   FileUp,
   FolderOpen,
@@ -21,6 +26,8 @@ import {
   Search,
   Sparkles,
   Star,
+  Upload,
+  User,
   X,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,6 +35,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BrandMark } from '../components/BrandMark';
 import { DocumentCard } from '../components/DocumentCard';
+import { useAuth } from '../auth/AuthContext';
+import { ProfileScreen } from './ProfileScreen';
 import { colors, darkColors, fonts, radii, shadow } from '../theme';
 import { LibraryFilter, MarkdownDocument, Project, ProjectFilter } from '../types';
 
@@ -39,7 +48,13 @@ type LibraryScreenProps = {
   darkMode: boolean;
   isLoading: boolean;
   isImporting: boolean;
+  isPasting: boolean;
+  isBackingUp: boolean;
+  isRestoring: boolean;
   onImport: () => void;
+  onPasteFromClipboard: () => void;
+  onExportBackup: () => void;
+  onRestoreBackup: () => void;
   onCreateDocument: () => void;
   onCreateProject: (name: string, color: string) => Project;
   onOpen: (document: MarkdownDocument) => void;
@@ -52,7 +67,13 @@ export function LibraryScreen({
   darkMode,
   isLoading,
   isImporting,
+  isPasting,
+  isBackingUp,
+  isRestoring,
   onImport,
+  onPasteFromClipboard,
+  onExportBackup,
+  onRestoreBackup,
   onCreateDocument,
   onCreateProject,
   onOpen,
@@ -61,17 +82,26 @@ export function LibraryScreen({
   const { width: windowWidth } = useWindowDimensions();
   const desktop = windowWidth >= 900;
   const theme = darkMode ? darkColors : colors;
+  const { isLoggedIn, user, syncState } = useAuth();
+  const [profileOpen, setProfileOpen] = useState(false);
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [projectFilter, setProjectFilter] = useState<ProjectFilter>('all');
   const [addSheetOpen, setAddSheetOpen] = useState(false);
+  const [backupSheetOpen, setBackupSheetOpen] = useState(false);
   const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectColor, setNewProjectColor] = useState(PROJECT_COLORS[0]);
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 150);
+    return () => clearTimeout(timer);
+  }, [query]);
 
   const visibleDocuments = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
+    const normalized = debouncedQuery.trim().toLowerCase();
     return [...documents]
       .filter((document) => (filter === 'favorites' ? document.isFavorite : true))
       .filter((document) => {
@@ -90,10 +120,11 @@ export function LibraryScreen({
         );
       })
       .sort((a, b) => b.lastOpenedAt - a.lastOpenedAt);
-  }, [documents, filter, projectFilter, projects, query]);
+  }, [debouncedQuery, documents, filter, projectFilter, projects]);
 
   const closeSearch = () => {
     setQuery('');
+    setDebouncedQuery('');
     setSearchOpen(false);
   };
 
@@ -128,14 +159,35 @@ export function LibraryScreen({
               <Text style={[styles.brandTagline, darkMode && styles.textSoftDark]}>Your Markdown, beautifully kept.</Text>
             </View>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Search library"
-            onPress={() => setSearchOpen(true)}
-            style={({ pressed }) => [styles.headerButton, darkMode && styles.surfaceDark, pressed && styles.pressed]}
-          >
-            <Search size={21} color={theme.ink} />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Back up or restore library"
+              onPress={() => setBackupSheetOpen(true)}
+              style={({ pressed }) => [styles.headerButton, darkMode && styles.surfaceDark, pressed && styles.pressed]}
+            >
+              <ArchiveRestore size={20} color={theme.ink} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Search library"
+              onPress={() => setSearchOpen(true)}
+              style={({ pressed }) => [styles.headerButton, darkMode && styles.surfaceDark, pressed && styles.pressed]}
+            >
+              <Search size={21} color={theme.ink} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open profile"
+              onPress={() => setProfileOpen(true)}
+              style={({ pressed }) => [styles.headerButton, darkMode && styles.surfaceDark, pressed && styles.pressed]}
+            >
+              <User size={20} color={isLoggedIn ? theme.moss : theme.ink} />
+              {isLoggedIn ? (
+                <View style={[styles.syncDot, { backgroundColor: syncState === 'synced' ? '#5A9A6B' : syncState === 'pending' ? '#D4A24E' : '#A3ADA6' }]} />
+              ) : null}
+            </Pressable>
+          </View>
         </View>
 
         {searchOpen ? (
@@ -369,6 +421,35 @@ export function LibraryScreen({
             <Text style={[styles.sheetTitle, darkMode && styles.textStrongDark]}>How would you like to begin?</Text>
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="Capture text from clipboard"
+              disabled={isPasting}
+              onPress={() => {
+                setAddSheetOpen(false);
+                onPasteFromClipboard();
+              }}
+              style={({ pressed }) => [
+                styles.addOption, darkMode && styles.surfaceDark,
+                isPasting && styles.addOptionDisabled,
+                pressed && styles.addOptionPressed,
+                darkMode && pressed && styles.addOptionPressedDark,
+              ]}
+            >
+              <View style={[styles.addOptionIcon, styles.clipboardOptionIcon, darkMode && styles.accentSurfaceDark]}>
+                {isPasting ? <ActivityIndicator size="small" color={theme.moss} /> : <ClipboardPaste size={22} color={theme.moss} />}
+              </View>
+              <View style={styles.addOptionCopy}>
+                <View style={styles.addOptionTitleRow}>
+                  <Text style={[styles.addOptionTitle, darkMode && styles.textStrongDark]}>
+                    {isPasting ? 'Reading clipboard…' : 'Paste from clipboard'}
+                  </Text>
+                </View>
+                <Text style={[styles.addOptionBody, darkMode && styles.textSoftDark]}>
+                  Turn copied text into a titled Markdown preview in one step.
+                </Text>
+              </View>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
               accessibilityLabel="Import a Markdown file"
               onPress={() => {
                 setAddSheetOpen(false);
@@ -418,6 +499,71 @@ export function LibraryScreen({
                 </View>
                 <Text style={[styles.addOptionBody, darkMode && styles.textSoftDark]}>
                   Start a note or paste Markdown from your favourite AI app.
+                </Text>
+              </View>
+            </Pressable>
+          </SafeAreaView>
+        </View>
+      </Modal>
+
+      <Modal animationType="slide" transparent visible={backupSheetOpen} onRequestClose={() => setBackupSheetOpen(false)}>
+        <View style={styles.modalRoot}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setBackupSheetOpen(false)} />
+          <SafeAreaView
+            edges={['bottom']}
+            style={[styles.addSheet, darkMode && styles.addSheetDark, desktop && styles.addSheetDesktop]}
+          >
+            <View style={[styles.sheetHandle, darkMode && styles.sheetHandleDark]} />
+            <Text style={[styles.sheetEyebrow, darkMode && styles.accentTextDark]}>LIBRARY BACKUP</Text>
+            <Text style={[styles.sheetTitle, darkMode && styles.textStrongDark]}>Keep a copy close</Text>
+            <Text style={[styles.backupIntro, darkMode && styles.textSoftDark]}>
+              Backups include your Markdown, projects, favourites, and reading progress. Restoring only adds missing documents.
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Export library backup"
+              disabled={isBackingUp || isRestoring}
+              onPress={() => { setBackupSheetOpen(false); onExportBackup(); }}
+              style={({ pressed }) => [
+                styles.addOption, darkMode && styles.surfaceDark,
+                (isBackingUp || isRestoring) && styles.addOptionDisabled,
+                pressed && styles.addOptionPressed,
+                darkMode && pressed && styles.addOptionPressedDark,
+              ]}
+            >
+              <View style={[styles.addOptionIcon, styles.exportOptionIcon, darkMode && styles.accentSurfaceDark]}>
+                {isBackingUp ? <ActivityIndicator size="small" color={theme.moss} /> : <Download size={22} color={theme.moss} />}
+              </View>
+              <View style={styles.addOptionCopy}>
+                <Text style={[styles.addOptionTitle, darkMode && styles.textStrongDark]}>
+                  {isBackingUp ? 'Preparing backup…' : 'Export a backup'}
+                </Text>
+                <Text style={[styles.addOptionBody, darkMode && styles.textSoftDark]}>
+                  Save one portable .json file somewhere you trust.
+                </Text>
+              </View>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Restore library backup"
+              disabled={isBackingUp || isRestoring}
+              onPress={() => { setBackupSheetOpen(false); onRestoreBackup(); }}
+              style={({ pressed }) => [
+                styles.addOption, darkMode && styles.surfaceDark,
+                (isBackingUp || isRestoring) && styles.addOptionDisabled,
+                pressed && styles.addOptionPressed,
+                darkMode && pressed && styles.addOptionPressedDark,
+              ]}
+            >
+              <View style={[styles.addOptionIcon, styles.restoreOptionIcon]}>
+                {isRestoring ? <ActivityIndicator size="small" color="#65507B" /> : <Upload size={22} color="#65507B" />}
+              </View>
+              <View style={styles.addOptionCopy}>
+                <Text style={[styles.addOptionTitle, darkMode && styles.textStrongDark]}>
+                  {isRestoring ? 'Reading backup…' : 'Restore a backup'}
+                </Text>
+                <Text style={[styles.addOptionBody, darkMode && styles.textSoftDark]}>
+                  Add a Marden backup without replacing this library.
                 </Text>
               </View>
             </Pressable>
@@ -480,6 +626,9 @@ export function LibraryScreen({
           </View>
         </View>
       </Modal>
+      {profileOpen ? (
+        <ProfileScreen darkMode={darkMode} onClose={() => setProfileOpen(false)} />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -579,6 +728,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.paperStrong,
     borderWidth: 1,
     borderColor: colors.line,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  syncDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: colors.paperStrong,
   },
   pressed: {
     opacity: 0.7,
@@ -960,6 +1123,30 @@ const styles = StyleSheet.create({
   editorOptionIcon: {
     backgroundColor: '#ECE6F2',
   },
+  clipboardOptionIcon: {
+    backgroundColor: colors.mossSoft,
+  },
+  exportOptionIcon: {
+    backgroundColor: colors.mossSoft,
+  },
+  restoreOptionIcon: {
+    backgroundColor: '#ECE6F2',
+  },
+  addOptionDisabled: {
+    opacity: 0.52,
+  },
+  addOptionPressedDark: {
+    borderColor: '#688373',
+    backgroundColor: darkColors.mossSoft,
+  },
+  backupIntro: {
+    marginTop: -8,
+    marginBottom: 18,
+    color: colors.inkSoft,
+    fontFamily: fonts.regular,
+    fontSize: 11.5,
+    lineHeight: 17,
+  },
   addOptionCopy: {
     flex: 1,
     paddingLeft: 13,
@@ -1166,10 +1353,6 @@ const styles = StyleSheet.create({
   },
   sheetHandleDark: {
     backgroundColor: darkColors.lineStrong,
-  },
-  addOptionPressedDark: {
-    borderColor: '#688373',
-    backgroundColor: darkColors.mossSoft,
   },
   projectModalCardDark: {
     backgroundColor: darkColors.paperStrong,

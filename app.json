@@ -2,8 +2,8 @@
   "expo": {
     "name": "Marden",
     "slug": "marden",
-    "version": "1.0.3",
-    "runtimeVersion": "1.0.3",
+    "version": "2.0.1",
+    "runtimeVersion": "2.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -12,21 +12,105 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.marden.reader",
-      "buildNumber": "4",
+      "buildNumber": "7",
       "config": {
         "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "Markdown document",
+            "CFBundleTypeRole": "Viewer",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": [
+              "net.daringfireball.markdown"
+            ],
+            "CFBundleTypeExtensions": [
+              "md",
+              "markdown",
+              "mdown",
+              "mkd"
+            ]
+          }
+        ],
+        "UTImportedTypeDeclarations": [
+          {
+            "UTTypeIdentifier": "net.daringfireball.markdown",
+            "UTTypeDescription": "Markdown document",
+            "UTTypeConformsTo": [
+              "public.plain-text"
+            ],
+            "UTTypeTagSpecification": {
+              "public.filename-extension": [
+                "md",
+                "markdown",
+                "mdown",
+                "mkd"
+              ],
+              "public.mime-type": [
+                "text/markdown",
+                "text/x-markdown"
+              ]
+            }
+          }
+        ]
       }
     },
     "android": {
       "package": "app.marden.reader",
-      "versionCode": 4,
+      "versionCode": 7,
+      "permissions": [
+        "REQUEST_INSTALL_PACKAGES"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#315C4A",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": true
+      "predictiveBackGestureEnabled": true,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "category": [
+            "DEFAULT"
+          ],
+          "data": [
+            {
+              "scheme": "content",
+              "mimeType": "text/markdown"
+            },
+            {
+              "scheme": "file",
+              "mimeType": "text/markdown"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "text/x-markdown"
+            },
+            {
+              "scheme": "file",
+              "mimeType": "text/x-markdown"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "text/plain"
+            },
+            {
+              "scheme": "file",
+              "mimeType": "text/plain"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "application/octet-stream"
+            },
+            {
+              "scheme": "file",
+              "mimeType": "application/octet-stream"
+            }
+          ]
+        }
+      ]
     },
     "web": {
       "name": "Marden",
@@ -52,10 +136,66 @@
           }
         }
       ],
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "react-native-enriched-markdown",
+        {
+          "enableMath": false
+        }
+      ],
+      [
+        "expo-sharing",
+        {
+          "ios": {
+            "enabled": true,
+            "appGroupId": "group.app.marden.reader",
+            "extensionBundleIdentifier": "app.marden.reader.ShareExtension",
+            "activationRule": {
+              "supportsFileWithMaxCount": 10
+            }
+          },
+          "android": {
+            "enabled": true,
+            "singleShareMimeTypes": [
+              "text/markdown",
+              "text/x-markdown",
+              "text/plain",
+              "application/octet-stream"
+            ],
+            "multipleShareMimeTypes": [
+              "text/markdown",
+              "text/x-markdown",
+              "text/plain",
+              "application/octet-stream"
+            ]
+          }
+        }
+      ],
+      "expo-web-browser"
     ],
     "extra": {
-      "privacy": "Files and library metadata stay on the device."
-    }
+      "privacy": "Files and library metadata stay on the device unless you explicitly export a backup.",
+      "eas": {
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "targetName": "expo-sharing-extension",
+                  "bundleIdentifier": "app.marden.reader.ShareExtension",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.app.marden.reader"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "projectId": "23720858-0f28-4092-b149-86d40f7b2048"
+      }
+    },
+    "owner": "nambirajan06"
   }
 }

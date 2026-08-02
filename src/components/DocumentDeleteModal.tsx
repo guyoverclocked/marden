@@ -24,7 +24,7 @@ export function DocumentDeleteModal({ document, onClose, onConfirm }: DocumentDe
           <Text style={styles.title}>Delete this file?</Text>
           <Text numberOfLines={2} style={styles.documentName}>{document?.title}</Text>
           <Text style={styles.body}>
-            The copy kept inside Marden will be removed. An original imported file stays unchanged.
+            The copy kept inside Marden will be removed. You can undo it for a few seconds, and an original imported file stays unchanged.
           </Text>
           <View style={styles.actions}>
             <Pressable

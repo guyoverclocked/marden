@@ -5,17 +5,27 @@ asar: true
 npmRebuild: false
 files:
   - main.cjs
+  - preload.cjs
   - package.json
 extraResources:
   - from: ../dist
     to: dist
 directories:
-  output: ../artifacts/macos
+  output: ../artifacts
   buildResources: ../assets
+fileAssociations:
+  - ext:
+      - md
+      - markdown
+      - mdown
+      - mkd
+    name: Markdown document
+    role: Viewer
+    rank: Alternate
+# ── macOS ──────────────────────────────────────────────
 mac:
   category: public.app-category.productivity
   icon: ../assets/icon.png
-  identity: null
   electronLanguages:
     - en
   target:
@@ -23,6 +33,26 @@ mac:
       arch:
         - arm64
   artifactName: Marden-${version}-macOS-${arch}.${ext}
+# ── Windows ────────────────────────────────────────────
+win:
+  icon: ../assets/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+        - arm64
+  artifactName: Marden-${version}-Windows-${arch}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+  buildUniversalInstaller: true
+# ── Auto‑update (electron‑builder publishes metadata) ──
+publish:
+  provider: github
+  owner: guyoverclocked
+  repo: marden
+  releaseType: release
 dmg:
   title: Marden ${version}
   iconSize: 104

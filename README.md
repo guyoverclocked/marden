@@ -1,118 +1,126 @@
-<p align="center">
-  <img src="assets/icon.png" width="128" alt="Marden app icon" />
-</p>
+# Marden
 
-<h1 align="center">Marden</h1>
+**A calm, local-first home for Markdown, ideas, and useful AI answers.**
 
-<p align="center"><strong>A calm, private home for the ideas worth keeping.</strong></p>
+Marden is a Markdown reader and library for Android, Apple-Silicon macOS, Windows, and the web. Capture a useful answer, import a `.md` file, or write from scratch; then organise it, read it comfortably, and optionally sync it privately across your own devices.
 
-<p align="center">
-  Save AI answers, brainstorms, research, plans, and Markdown notes—then organize them into projects and read them beautifully.
-</p>
+[Latest release](https://github.com/guyoverclocked/marden/releases/latest) · [Privacy](PRIVACY.md) · [Security](SECURITY.md)
 
-<p align="center">
-  <a href="https://github.com/guyoverclocked/marden/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/guyoverclocked/marden?style=flat-square&color=315C4A" /></a>
-  <a href="https://github.com/guyoverclocked/marden/releases/latest"><img alt="Download Android APK" src="https://img.shields.io/badge/Android-Download_APK-315C4A?style=flat-square&logo=android&logoColor=white" /></a>
-  <a href="https://github.com/guyoverclocked/marden/releases/latest"><img alt="Download Apple Silicon Mac build" src="https://img.shields.io/badge/macOS-Apple_Silicon-315C4A?style=flat-square&logo=apple&logoColor=white" /></a>
-  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-D4A85A?style=flat-square" /></a>
-  <img alt="Local first" src="https://img.shields.io/badge/Storage-Local_first-E8E2D6?style=flat-square&labelColor=315C4A" />
-</p>
+## What it does
 
-<p align="center">
-  <a href="#why-marden">Why Marden</a> ·
-  <a href="#see-marden-in-action">Screenshots</a> ·
-  <a href="#what-marden-does">Features</a> ·
-  <a href="#install-marden">Install</a> ·
-  <a href="#run-it-yourself">Build</a>
-</p>
+- Import, write, edit, rename, move, favourite, search, and delete Markdown documents.
+- Open `.md`, `.markdown`, `.mdown`, and `.mkd` files from supported apps.
+- Read Markdown with headings, lists, quotes, links, code blocks, tables, Mermaid diagrams, dark mode, adjustable type, outline, focus mode, find, copy, and saved reading position.
+- Highlight reader text. Highlights are stored as standard `==highlighted text==` Markdown, so they export cleanly and sync with the document.
+- Organise documents into colour-coded projects, or leave them Unfiled.
+- Export and restore a portable Marden backup.
+- Optionally sign in with Google and sync a private library through Supabase.
+- Receive GitHub-release updates on Android and Windows.
 
-## See Marden in action
+Marden has no required account, ads, or analytics SDK. Without sign-in, the library stays on the device.
 
-<table>
-  <tr>
-    <td align="center" width="33%"><img src="docs/screenshots/editor.png" width="240" alt="Marden Markdown editor" /><br /><sub><strong>Write or paste</strong><br />Bring in an answer from any AI app.</sub></td>
-    <td align="center" width="33%"><img src="docs/screenshots/reader.png" width="240" alt="Marden dark mode Markdown reader" /><br /><sub><strong>Read without distraction</strong><br />A calm reader with a saved dark theme.</sub></td>
-    <td align="center" width="33%"><img src="docs/screenshots/table-dark.png" width="240" alt="Supported Mermaid flowchart and mobile table in Marden" /><br /><sub><strong>Keep the rich parts</strong><br />Supported Mermaid flowcharts and swipeable tables.</sub></td>
-  </tr>
-</table>
+## Install
 
-## Why Marden
+Download the appropriate asset from the [latest GitHub Release](https://github.com/guyoverclocked/marden/releases/latest).
 
-AI conversations produce genuinely useful things: explanations, plans, code notes, research summaries, decisions, and half-formed ideas worth developing. Too often, that work ends up buried in chat history, scattered across apps, or stranded on a clipboard.
+| Platform | Download | Notes |
+| --- | --- | --- |
+| Android | `Marden-<version>.apk` | Open the APK and permit installs from your browser or file manager if Android asks. |
+| Windows | `Marden-<version>-Windows.exe` | A universal NSIS installer for x64 and ARM64 Windows. |
+| Apple Silicon Mac | `Marden-<version>-macOS-arm64.dmg` | Drag Marden to Applications. For the unsigned build, right-click → **Open** on first launch. |
 
-**Marden turns those fragments into a personal reading library.** Paste a Markdown response from your favourite AI app, import an existing `.md` file, or write from scratch. Keep it Unfiled for later or place it inside a project. When you return, Marden gives it a focused, comfortable reading experience instead of another text box.
+The macOS package is for Apple-Silicon Macs only. It is unsigned and not notarized, so it is a manual-install build. A Developer ID certificate is required before reliable macOS automatic updates can be offered.
 
-Marden is useful for saving:
+The published 2.0.1 release predates the universal-installer policy and therefore provides `Marden-2.0.1-Windows-x64.exe`. Subsequent releases use the universal Windows filename shown above.
 
-- AI answers from ChatGPT, Claude, Gemini, Codex, Perplexity, or any app that can copy text
-- Brainstorms, product ideas, prompt experiments, and decision logs
-- Research notes, learning material, meeting follow-ups, and how-to guides
-- Technical specs, database schemas, code documentation, and supported Mermaid flowcharts
-- Any Markdown you want to keep close without building a complicated knowledge system
-
-## What Marden does
-
-| | |
-| --- | --- |
-| **Capture without friction** | Import `.md` and `.markdown` files, or open the built-in editor to type or paste content from another app. Preview the result before saving. |
-| **Organize your way** | Group documents into colour-coded projects, keep loose thoughts in Unfiled, search the library, favourite important files, and jump back into recent reading. |
-| **Make Markdown feel native** | Read headings, quotes, lists, links, code, phone-friendly tables, and supported Mermaid flowcharts in a polished mobile layout. |
-| **Stay comfortable for longer** | Switch between light and dark themes, adjust type, open a document outline, use focus mode, and resume from saved reading progress. |
-| **Keep your writing private** | No account, ads, analytics SDK, or developer-operated content service. Your library is stored in Marden's private app directory on your device. |
-
-## Install Marden
+## Updates
 
 ### Android
 
-The fastest route is the installable test APK on the [latest GitHub Release](https://github.com/guyoverclocked/marden/releases/latest).
+Marden checks the latest GitHub Release. When an update is available, it can download the new APK and open Android's installer. The user must approve the installation; Android does not allow a sideloaded app to install an update silently.
 
-1. Download `Marden-1.0.3.apk` on your Android phone.
-2. Open the downloaded file.
-3. If Android asks, allow installs from that browser or file manager.
-4. Tap **Install**, then open Marden.
+### Windows
 
-Android may warn about apps installed outside Google Play. That is expected for a sideloaded APK. This first APK is debug-certificate signed for direct testing, not Play Store distribution; uninstall it before switching to a future build signed with a different key. The release assets include a SHA-256 checksum so the download can be verified.
+Windows uses Electron's GitHub-release updater. A release must include both the universal Windows installer and the generated `latest.yml` manifest. Marden downloads updates automatically and installs them on the next launch.
 
-### Apple Silicon Mac
+### macOS
 
-Download `Marden-1.0.3-macOS-arm64.dmg` from the [latest GitHub Release](https://github.com/guyoverclocked/marden/releases/latest), open it, and drag Marden to Applications. The desktop layout uses the same local library and reader experience with wider, bounded content and a two-column document library.
+The app can show the latest release as a manual-download fallback. Automatic macOS updates are intentionally not advertised for unsigned builds because macOS requires a valid Developer ID signature for trusted updates.
 
-This direct test build is not notarized. On first launch, right-click Marden in Applications, choose **Open**, then confirm. The build runs natively on Apple Silicon Macs; it does not target Intel Macs.
+## Optional private cloud sync
 
-### iPhone
+Cloud sync is optional. It stores documents, projects, reading progress, favourites, and Markdown highlights in your own Supabase project behind Row-Level Security.
 
-Apple requires every iPhone build to be signed for the device, so this repository cannot provide one universal IPA in the way Android can provide an APK. Marden supports three practical test routes:
+### 1. Create the environment file
 
-- **Expo Go** — quickest test, no paid Apple membership
-- **Xcode Personal Team** — a real Marden app icon, signed with a free Apple Account
-- **EAS internal build** — a self-contained sideload for registered devices with a paid Apple Developer membership
+```bash
+cp .env.example .env
+```
 
-Follow the step-by-step [iPhone sideload guide](IOS_SIDELOAD.md) for the route that fits you.
+Set the values in `.env`:
 
-## Privacy by design
+```dotenv
+EXPO_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
 
-Marden does not require an account and does not send your Markdown to a Marden server. Documents, project names, favourites, preferences, and reading progress stay on the device. Opening a remote link or displaying a remote image can still contact that destination.
+`.env` and `.env.*` are ignored by Git; only `.env.example` is tracked. Do not commit access tokens, Google client secrets, certificates, keystores, or production credentials.
 
-Read the full [privacy policy](PRIVACY.md) and [security notes](SECURITY.md).
+The Supabase **anon** key is designed to be included in an app client. Security comes from correctly configured Row-Level Security policies, not from treating that key as a secret.
 
-## Run it yourself
+### 2. Create the database schema
 
-Marden is built with React Native, Expo SDK 57, and TypeScript.
+In Supabase, open **SQL Editor**, paste the complete contents of [`supabase/schema.sql`](supabase/schema.sql), and run it. The schema is idempotent, so it is safe to run again when upgrading an earlier Marden database.
 
-### Development
+It creates the `documents`, `projects`, and `preferences` tables, their indexes, Row-Level Security policies, and the incremental-sync RPC function.
 
-Requirements: Node.js 22.13+ and Expo Go on a physical phone.
+### 3. Configure Google sign-in
+
+1. In Supabase, open **Authentication → Providers → Google** and enable Google.
+2. In Google Cloud Console, create an OAuth Web client and add the **Supabase callback URL displayed by the Google provider settings** as its authorised redirect URI.
+3. Copy the Google client ID and client secret into Supabase. Keep the Google client secret in Supabase/Google Cloud only; never put it in this repository or `.env`.
+4. In **Supabase Authentication → URL Configuration**, add these redirect URLs:
+
+   ```text
+   marden://auth
+   marden://app/**
+   ```
+
+On desktop, clicking **Continue with Google** opens the user's default browser. Google returns through Supabase to `marden://auth`, which routes the completed sign-in safely back to Marden.
+
+### 4. Verify sync
+
+1. Install the same build on two devices.
+2. Sign in with the same Google account on both.
+3. Create or highlight a document on the first device.
+4. Use **Profile → Sync now** on the other device, or wait for automatic sync.
+5. Confirm the document and its highlights appear on the second device.
+
+When two offline edits conflict, Marden keeps the newer version and preserves the losing local edit as a conflict copy rather than silently discarding it.
+
+## Development
+
+### Requirements
+
+- Node.js 22.13 or newer
+- npm
+- An Expo development build for native-only testing
+- Android Studio/Android SDK only for local Android builds
+- An Apple-Silicon Mac for the macOS package
 
 ```bash
 git clone https://github.com/guyoverclocked/marden.git
 cd marden
 npm install
+cp .env.example .env # optional: only if testing cloud sync
 npm start
 ```
 
-Scan the QR code with Expo Go while the computer and phone are on the same network. If LAN discovery is blocked, use `npx expo start --go --tunnel`.
+Expo Go is useful for basic UI checks, but native file associations, the iOS share extension, and production OAuth flows require a development or release build.
 
-### Verify the project
+## Quality checks
+
+Run these before committing or releasing:
 
 ```bash
 npm run typecheck
@@ -120,39 +128,73 @@ npm run doctor
 npm run export:web
 ```
 
-### Build an Android APK
+Suggested functional checks:
 
-Using EAS Build:
+- Import and edit a Markdown file; confirm the original external file is unchanged.
+- Select reader text and create a highlight.
+- Sign in, confirm sync, then use **Profile → Sign out**. The profile should return to the sign-in state while the local library remains available.
+- Test Google sign-in on desktop: it must open the default browser and return to Marden.
+- Test Android's download-and-install update flow from a newer GitHub Release.
+
+## Build
+
+### Android APK with EAS
 
 ```bash
 npx eas-cli@latest login
 npm run build:apk
 ```
 
-For a credential-free local test APK on macOS with Java 17 and Android SDK 36 installed:
+The preview profile creates an internal-distribution APK. EAS stores the Android signing key for the Expo account, so use the same account for future updates. A new Android release must increment `android.versionCode` in `app.json`.
+
+### Desktop packages
 
 ```bash
-npm run build:apk:local
-```
-
-The local script names the result from the app version—for this release, `artifacts/Marden-1.0.3.apk`. Production Android and iOS builds are available through `npm run build:android` and `npm run build:ios`.
-
-### Build the Apple Silicon Mac app
-
-On an Apple Silicon Mac with Node.js 22.13 or newer:
-
-```bash
+# Apple-Silicon DMG only
 npm run build:mac
+
+# Universal Windows installer only
+npm run build:win
+
+# Both desktop deliverables
+npm run build:desktop
 ```
 
-This exports the Expo web target and packages it as `artifacts/macos/Marden-1.0.3-macOS-arm64.dmg`.
+Build outputs are written to `artifacts/`, which is ignored by Git.
+
+## Release checklist
+
+1. Update the app version in `app.json`, `package.json`, and `desktop/package.json`.
+2. Increment Android `versionCode`; increment iOS `buildNumber` when creating an iOS build.
+3. Run the quality checks.
+4. Build the Android APK with EAS and download it into `artifacts/`.
+5. Run `npm run build:desktop`.
+6. Create a GitHub Release and upload only:
+
+   ```text
+   Marden-<version>.apk
+   Marden-<version>-Windows.exe
+   Marden-<version>-macOS-arm64.dmg
+   latest.yml
+   ```
+
+   `latest.yml` is required for Windows OTA updates. Do not upload ZIPs, Intel macOS builds, or extra architecture-specific Windows installers.
+
+7. Confirm `latest.yml` names the uploaded Windows installer and has the matching checksum before publishing the release.
+8. Test the APK upgrade on an Android device and the updater check on a Windows installation.
+
+## Privacy and security
+
+- Marden is local-first; cloud sync is opt-in.
+- Supabase Row-Level Security limits cloud rows to the signed-in user.
+- No local secret file is committed. Check with `git status --ignored` and `git ls-files .env` before publishing.
+- Imported Markdown is copied into Marden's private library; the source file is not modified.
+- A shared or exported Markdown file may contain sensitive information. Review it before sending it elsewhere.
+
+See [PRIVACY.md](PRIVACY.md) and [SECURITY.md](SECURITY.md) for the complete policies.
 
 ## Contributing
 
-Thoughtful bug reports, accessibility feedback, and focused pull requests are welcome. Please include the device, operating-system version, and a small sample Markdown file when reporting a rendering issue. Never attach private notes or sensitive AI conversations to a public issue.
+Bug reports and focused pull requests are welcome. Include the platform, OS version, and a minimal non-sensitive Markdown sample when reporting a rendering issue. Never attach private notes, credentials, or copied AI conversations to a public issue.
 
 Marden is released under the [MIT License](LICENSE).
-
----
-
-<p align="center"><strong>Keep the answer. Keep the idea. Make room to think.</strong></p>

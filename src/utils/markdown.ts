@@ -28,6 +28,69 @@ export const wordCount = (content: string) => {
 
 export const readMinutes = (count: number) => Math.max(1, Math.ceil(count / 220));
 
+/**
+ * Converts a Markdown document to readable text for the reader's copy action.
+ * It preserves code, list markers, and table rows while dropping presentation
+ * syntax and link destinations.
+ */
+export const plainTextFromMarkdown = (content: string) =>
+  content
+    .replace(/```[^\n]*\n([\s\S]*?)```/g, '$1')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^\s*>\s?/gm, '')
+    .replace(/^(\s*)[-+*]\s+/gm, '$1• ')
+    .replace(/^(\s*)(\d+)\.\s+/gm, '$1$2. ')
+    .replace(/^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$/gm, '')
+    .replace(/\|/g, '\t')
+    .replace(/==([^=\n]+)==/g, '$1')
+    .replace(/~~|\*\*|__|[*_`]/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+/**
+ * Wrap a rendered selection in GitHub-flavoured Markdown highlight markers.
+ * Keeping highlights in the document body makes exported Markdown portable
+ * and lets normal document sync carry them to every signed-in device.
+ */
+export const addMarkdownHighlight = (
+  content: string,
+  selectedText: string,
+  preferredOffset = 0,
+): string => {
+  if (!selectedText.trim()) return content;
+
+  const startAt = Math.max(0, preferredOffset);
+  let index = content.indexOf(selectedText, startAt);
+  if (index === -1 && startAt > 0) index = content.indexOf(selectedText);
+  if (index === -1) return content;
+
+  const end = index + selectedText.length;
+  if (content.slice(Math.max(0, index - 2), index) === '==' && content.slice(end, end + 2) === '==') {
+    return content;
+  }
+
+  return `${content.slice(0, index)}==${content.slice(index, end)}==${content.slice(end)}`;
+};
+
+/**
+ * Persists a task toggle emitted by Enriched Markdown's GFM task-list UI.
+ * The index is the renderer's document-order, zero-based task index.
+ */
+export const setTaskListItemChecked = (content: string, targetIndex: number, checked: boolean) => {
+  let taskIndex = -1;
+  let updated = false;
+  const next = content.replace(/^(\s*[-+*]\s+\[)([ xX])(\]\s+)/gm, (match, start, _state, end) => {
+    taskIndex += 1;
+    if (taskIndex !== targetIndex) return match;
+    updated = true;
+    return start + (checked ? 'x' : ' ') + end;
+  });
+
+  return updated ? next : content;
+};
+
 export const previewFromMarkdown = (content: string) => {
   const paragraph = content
     .split(/\n\s*\n/)
@@ -76,7 +139,54 @@ export const createDocument = (
     readingProgress: 0,
     wordCount: wordCount(content),
     projectId,
+    deviceModifiedAt: now,
   };
+};
+
+export const getSearchMatches = (content: string, query: string) => {
+  if (!query.trim()) return { patchedContent: content, matches: [] };
+
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(escaped, 'gi');
+
+  const lines = content.split('\n');
+  const fenceRanges: { start: number; end: number }[] = [];
+  let insideFence = false;
+  let fenceStart = 0;
+  let globalIdx = 0;
+
+  for (const line of lines) {
+    const fenceMatch = line.match(/^ {0,3}(`{3,}|~{3,})/);
+    if (fenceMatch && !insideFence) {
+      insideFence = true;
+      fenceStart = globalIdx;
+    } else if (fenceMatch && insideFence) {
+      insideFence = false;
+      fenceRanges.push({ start: fenceStart, end: globalIdx + line.length });
+    }
+    globalIdx += line.length + 1;
+  }
+
+  const isInsideFence = (pos: number) =>
+    fenceRanges.some((r) => pos >= r.start && pos < r.end);
+
+  const matches: { position: number; length: number }[] = [];
+  let result = '';
+  let contentIdx = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(content)) !== null) {
+    if (isInsideFence(match.index)) continue;
+
+    result += content.slice(contentIdx, match.index);
+    const wrapped = `==${match[0]}==`;
+    matches.push({ position: result.length, length: match[0].length });
+    result += wrapped;
+    contentIdx = match.index + match[0].length;
+  }
+  result += content.slice(contentIdx);
+
+  return { patchedContent: result, matches };
 };
 
 export const formatRelativeDate = (timestamp: number) => {

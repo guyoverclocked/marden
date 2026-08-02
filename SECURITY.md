@@ -7,11 +7,11 @@ Marden treats imported Markdown as untrusted local content:
 - Raw HTML rendering is disabled.
 - Automatic bare-URL linkification is disabled; explicit Markdown links still work.
 - Imported documents are limited to 2 MB.
+- Backup files use a versioned format that is validated before restore. Restore only merges new documents and never overwrites an existing document.
 - Mermaid diagrams are parsed and drawn by Marden's native renderer; diagram source is not executed as JavaScript.
-- The app does not upload Markdown to a developer-operated service.
+- Cloud sync is opt-in. Supabase Row-Level Security scopes every cloud record and sync query to the authenticated user.
+- Restored backups discard cloud identifiers so their content cannot be written into the account that created the backup.
 
 ## Dependency audit note
 
-As of July 15, 2026, `react-native-markdown-display` depends on `markdown-it` and `linkify-it`, for which npm reports GHSA-22p9-wv53-3rq4 with no published fix. The affected automatic link-matching path is explicitly disabled in `MarkdownRenderer.tsx`, and imports are size-limited. Track the upstream packages and upgrade when a patched compatible release is available.
-
-The moderate `uuid` advisory reported beneath Expo's native configuration tooling is not part of Marden's runtime data path. Expo Doctor is the compatibility authority for the pinned Expo SDK and currently passes all checks.
+Run `npm audit` before every release and address runtime production dependencies according to severity and exploitability. Expo Doctor is the compatibility authority for the pinned Expo SDK.

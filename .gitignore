@@ -43,14 +43,12 @@ yarn-error.*
 /android
 
 # local build outputs
-/artifacts/*.apk
-/artifacts/*.ipa
-/artifacts/*.xcarchive
-/artifacts/macos/
+/artifacts/
 
 # local assistant and workspace instructions
 .claude/
 .codex/
+.commandcode/
 AGENTS.md
 CLAUDE.md
 

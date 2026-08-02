@@ -9,9 +9,12 @@ const LIBRARY_KEY = 'marden.library.v1';
 const PROJECTS_KEY = 'marden.projects.v1';
 const DOCUMENTS_DIRECTORY = 'MardenDocuments';
 
-type StoredDocument = Omit<MarkdownDocument, 'content'> & {
+type StoredDocument = Omit<MarkdownDocument, 'content' | 'cloudId' | 'deviceModifiedAt' | 'cloudModifiedAt'> & {
   content?: string;
   contentFileName?: string;
+  cloudId?: string | null;
+  deviceModifiedAt?: number;
+  cloudModifiedAt?: number;
 };
 
 const persistedContent = new Map<string, string>();

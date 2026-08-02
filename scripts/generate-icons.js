@@ -170,3 +170,95 @@ write('assets/splash-icon.png', downsample(splashLarge, 1024, 1024));
 write('assets/favicon.png', renderIcon(48));
 
 console.log('Generated Marden app icons and splash assets.');
+
+// ── Windows .ico generation ───────────────────────────
+// electron-builder needs a .ico for Windows builds.
+// We produce a multi‑resolution .ico from assets/icon.png using pngjs
+// (already installed) by packing BMP frames into an ICO container.
+
+try {
+  const source = PNG.sync.read(fs.readFileSync(path.join(root, 'assets', 'icon.png')));
+  const sizes = [16, 32, 48, 64, 128, 256];
+
+  // ICO header: reserved(2) + imageType(2) + imageCount(2) = 6 bytes
+  const imageCount = sizes.length;
+  // directory entry: w(1) + h(1) + palette(1) + reserved(1) + planes(2) + bpp(2) + size(4) + offset(4) = 16 bytes
+  const directorySize = 6 + 16 * imageCount;
+
+  const frames = [];
+  let dataOffset = directorySize;
+
+  for (const size of sizes) {
+    const down = downsample(source, size, size);
+    // BMP data: we write BGRA rows bottom → top (BMP row order)
+    const rowSize = ((size * 32 + 31) / 32 | 0) * 4;
+    const bmpDataSize = rowSize * size;
+    const bmpHeaderSize = 40; // BITMAPINFOHEADER
+    let bmpData = Buffer.alloc(bmpHeaderSize + bmpDataSize);
+    let offset = 0;
+
+    // BITMAPINFOHEADER
+    bmpData.writeUInt32LE(40, offset); offset += 4; // biSize
+    bmpData.writeInt32LE(size, offset); offset += 4; // biWidth
+    bmpData.writeInt32LE(size * 2, offset); offset += 4; // biHeight (double for top‑down + AND mask)
+    bmpData.writeUInt16LE(1, offset); offset += 2; // biPlanes
+    bmpData.writeUInt16LE(32, offset); offset += 2; // biBitCount
+    bmpData.writeUInt32LE(0, offset); offset += 4; // biCompression (BI_RGB)
+    bmpData.writeUInt32LE(bmpDataSize, offset); offset += 4; // biSizeImage
+    // rest of header is zeroes
+
+    // Pixel rows (bottom → top for BMP)
+    offset = bmpHeaderSize;
+    for (let y = size - 1; y >= 0; y -= 1) {
+      const rowStart = offset;
+      for (let x = 0; x < size; x += 1) {
+        const srcIdx = (y * size + x) * 4;
+        bmpData.writeUInt8(down.data[srcIdx + 2], offset);     // B
+        bmpData.writeUInt8(down.data[srcIdx + 1], offset + 1); // G
+        bmpData.writeUInt8(down.data[srcIdx], offset + 2);     // R
+        bmpData.writeUInt8(down.data[srcIdx + 3], offset + 3); // A
+        offset += 4;
+      }
+      // pad row to 4‑byte boundary
+      while ((offset - rowStart) % 4 !== 0) {
+        bmpData.writeUInt8(0, offset);
+        offset += 1;
+      }
+    }
+
+    // AND mask: 1 bit per pixel, 0 = opaque (BGRA alpha handles transparency)
+    const andMaskRowSize = ((size + 31) / 32 | 0) * 4;
+    const andMask = Buffer.alloc(andMaskRowSize * size);
+    bmpData = Buffer.concat([bmpData, andMask]);
+
+    frames.push({ size, data: bmpData });
+    dataOffset += bmpData.length;
+  }
+
+  // Build ICO container
+  const icoBuffer = Buffer.alloc(dataOffset);
+  let pos = 0;
+  icoBuffer.writeUInt16LE(0, pos); pos += 2;          // reserved
+  icoBuffer.writeUInt16LE(1, pos); pos += 2;          // type: ICO
+  icoBuffer.writeUInt16LE(imageCount, pos); pos += 2;  // image count
+
+  let entryOffset = directorySize;
+  for (const frame of frames) {
+    icoBuffer.writeUInt8(frame.size === 256 ? 0 : frame.size, pos); pos += 1; // width (0 means 256)
+    icoBuffer.writeUInt8(frame.size === 256 ? 0 : frame.size, pos); pos += 1; // height (0 means 256)
+    icoBuffer.writeUInt8(0, pos); pos += 1; // palette
+    icoBuffer.writeUInt8(0, pos); pos += 1; // reserved
+    icoBuffer.writeUInt16LE(1, pos); pos += 2; // planes
+    icoBuffer.writeUInt16LE(32, pos); pos += 2; // bpp
+    icoBuffer.writeUInt32LE(frame.data.length, pos); pos += 4; // size
+    icoBuffer.writeUInt32LE(entryOffset, pos); pos += 4; // offset
+    frame.data.copy(icoBuffer, entryOffset);
+    entryOffset += frame.data.length;
+  }
+
+  fs.writeFileSync(path.join(root, 'assets', 'icon.ico'), icoBuffer);
+  console.log('Generated assets/icon.ico (Windows)');
+} catch (err) {
+  console.warn('Could not generate Windows .ico: ' + err.message);
+  console.warn('electron-builder can auto‑convert from icon.png if needed.');
+}
