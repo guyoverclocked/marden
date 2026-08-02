@@ -182,10 +182,11 @@ export const mergeCloudProjects = (
     }
   }
 
-  // A cloud ID from another account (or a hard-deleted legacy row) must never
-  // be updated under the current account. Treat that local project as new.
+  // A cloud ID from another account or a hard-deleted row must never leave the
+  // local record permanently attached to an unreachable UUID. Preserve the
+  // local data and recreate it on the next push.
   for (const project of projects) {
-    if (project.cloudId && !remoteIds.has(project.cloudId) && project.cloudUserId !== userId) {
+    if (project.cloudId && !remoteIds.has(project.cloudId)) {
       clearProjectCloudMetadata(project);
     }
   }
@@ -338,7 +339,7 @@ export const mergeCloudDocuments = (
   }
 
   for (const document of [...documents]) {
-    if (document.cloudId && !remoteIds.has(document.cloudId) && document.cloudUserId !== userId) {
+    if (document.cloudId && !remoteIds.has(document.cloudId)) {
       if (document.deletedAt) {
         documents.splice(documents.indexOf(document), 1);
       } else {

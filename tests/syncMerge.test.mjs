@@ -245,6 +245,38 @@ test('clears cloud ownership metadata that belongs to another account', () => {
   assert.equal(isDocumentDirty(documents[0]), true);
 });
 
+test('recovers local data when current-account cloud rows were hard-deleted', () => {
+  const documents = [localDocument({
+    cloudId: 'missing-document',
+    cloudUserId: USER_ID,
+    cloudVersion: V1,
+    cloudModifiedAt: Date.parse(V1),
+    syncedDeviceModifiedAt: 100,
+  })];
+  const projects = [{
+    id: 'local-project',
+    name: 'Kept project',
+    color: '#123456',
+    createdAt: 100,
+    deviceModifiedAt: 100,
+    cloudId: 'missing-project',
+    cloudUserId: USER_ID,
+    cloudVersion: V1,
+    cloudModifiedAt: Date.parse(V1),
+    syncedDeviceModifiedAt: 100,
+  }];
+
+  mergeCloudProjects([], projects, USER_ID);
+  mergeCloudDocuments([], documents, projects, USER_ID);
+
+  assert.equal(projects.length, 1);
+  assert.equal(projects[0].cloudId, undefined);
+  assert.equal(documents.length, 1);
+  assert.equal(documents[0].content, '# Local');
+  assert.equal(documents[0].cloudId, undefined);
+  assert.equal(isDocumentDirty(documents[0]), true);
+});
+
 test('live reconciliation keeps edits made while a sync is in flight', () => {
   const baseDocument = localDocument({ deviceModifiedAt: 200 });
   const syncedDocument = localDocument({
