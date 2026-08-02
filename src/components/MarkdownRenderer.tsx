@@ -1,17 +1,35 @@
 import React, { useMemo } from 'react';
-import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Markdown, { MarkdownIt } from 'react-native-markdown-display';
+import { Linking, Platform, StyleSheet, View } from 'react-native';
+import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
+import type { MarkdownStyle } from 'react-native-enriched-markdown';
 
 import { colors, fonts, radii } from '../theme';
 import { TextScale } from '../types';
-import { CodeBlock } from './CodeBlock';
 import { MermaidDiagram } from './MermaidDiagram';
 
 type MarkdownRendererProps = {
   content: string;
   textScale: TextScale;
   darkMode?: boolean;
+  selectable?: boolean;
+  wideLayout?: boolean;
+  availableWidth?: number;
+  onTaskListItemPress?: (event: { index: number; checked: boolean; text: string }) => void;
+  onHighlightRequest?: (segmentMarkdown: string, segmentOffset: number, selectedText: string) => void;
 };
+
+type RenderSegment =
+  | {
+      kind: 'markdown';
+      markdown: string;
+      fullWidth: boolean;
+      taskOffset: number;
+      sourceOffset: number;
+    }
+  | {
+      kind: 'mermaid';
+      source: string;
+    };
 
 const sizes = {
   compact: { body: 15, line: 25, h1: 31, h2: 23, h3: 18, table: 12, tableHead: 11.5, tableLine: 18 },
@@ -19,19 +37,113 @@ const sizes = {
   large: { body: 19, line: 32, h1: 38, h2: 28, h3: 22, table: 16, tableHead: 15.5, tableLine: 24 },
 };
 
-// Standard Markdown links stay enabled; bare-URL scanning and raw HTML are disabled.
-const markdownParser = MarkdownIt({ typographer: true, linkify: false, html: false });
+const FENCE_START = /^ {0,3}(\x60{3,}|~{3,})\s*([^\s]*)?.*$/;
+const TASK_LIST_ITEM = /^\s*[-+*]\s+\[[ xX]\]\s+/gm;
+const TABLE_DIVIDER = /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$/;
+const RENDERER_CONTAINER_STYLE = { width: '100%' } as const;
 
-const tableColumnWidth = (index: number, columnCount: number, textScale: TextScale) => {
-  const multiplier = sizes[textScale].table / sizes.comfortable.table;
-  if (columnCount === 2) return (index === 0 ? 230 : 410) * multiplier;
-  if (columnCount === 3) return ([200, 180, 310][index] || 180) * multiplier;
-  if (columnCount === 4) return ([180, 150, 90, 320][index] || 180) * multiplier;
-  return (index === columnCount - 1 ? 280 : 170) * multiplier;
+const isTableHeader = (line: string) => line.includes('|') && line.trim().length > 0;
+
+const countTaskListItems = (markdown: string) => (markdown.match(TASK_LIST_ITEM) || []).length;
+
+/**
+ * The maintained renderer intentionally has no AST rule hook. Split only
+ * Mermaid fences (which Marden renders natively) and desktop tables. This
+ * leaves all ordinary Markdown in the maintained parser while allowing prose
+ * and data-heavy blocks to use different measured widths.
+ */
+const splitMarkdown = (content: string, separateWideTables: boolean): RenderSegment[] => {
+  const normalized = content.replace(/\r\n?/g, '\n');
+  const lines = normalized.split('\n');
+  const segments: RenderSegment[] = [];
+  let buffer: string[] = [];
+  let bufferStart = 0;
+  let globalIdx = 0;
+  let taskOffset = 0;
+
+  const pushMarkdown = (markdown: string, fullWidth: boolean) => {
+    if (!markdown.trim()) return;
+    segments.push({ kind: 'markdown', markdown, fullWidth, taskOffset, sourceOffset: bufferStart });
+    taskOffset += countTaskListItems(markdown);
+  };
+
+  const advance = (line: string) => {
+    globalIdx += line.length + 1;
+  };
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if (buffer.length === 0) bufferStart = globalIdx;
+    const fenceMatch = lines[index].match(FENCE_START);
+    if (fenceMatch) {
+      const marker = fenceMatch[1];
+      const language = (fenceMatch[2] || '').toLowerCase();
+      const closingFence = new RegExp('^ {0,3}' + marker.replace(/[.*+?^\${}()|[\]\\]/g, '\\$&') + '\\s*$');
+
+      if (language === 'mermaid') {
+        pushMarkdown(buffer.join('\n'), false);
+        buffer = [];
+        advance(lines[index]);
+        const diagramSources: string[] = [];
+        index += 1;
+        while (index < lines.length && !closingFence.test(lines[index])) {
+          diagramSources.push(lines[index]);
+          advance(lines[index]);
+          index += 1;
+        }
+        segments.push({ kind: 'mermaid', source: diagramSources.join('\n') });
+        continue;
+      }
+
+      buffer.push(lines[index]);
+      advance(lines[index]);
+      index += 1;
+      while (index < lines.length && !closingFence.test(lines[index])) {
+        buffer.push(lines[index]);
+        advance(lines[index]);
+        index += 1;
+      }
+      if (index < lines.length) { buffer.push(lines[index]); advance(lines[index]); }
+      continue;
+    }
+
+    if (separateWideTables && isTableHeader(lines[index]) && TABLE_DIVIDER.test(lines[index + 1] || '')) {
+      pushMarkdown(buffer.join('\n'), false);
+      buffer = [];
+
+      const tableLines = [lines[index], lines[index + 1]];
+      advance(lines[index]);
+      advance(lines[index + 1]);
+      index += 2;
+      while (index < lines.length && lines[index].trim() && lines[index].includes('|')) {
+        tableLines.push(lines[index]);
+        advance(lines[index]);
+        index += 1;
+      }
+      pushMarkdown(tableLines.join('\n'), true);
+      index -= 1;
+      continue;
+    }
+
+    buffer.push(lines[index]);
+    advance(lines[index]);
+  }
+
+  pushMarkdown(buffer.join('\n'), false);
+  return segments;
 };
 
-function MarkdownRendererComponent({ content, textScale, darkMode = false }: MarkdownRendererProps) {
+function MarkdownRendererComponent({
+  content,
+  textScale,
+  darkMode = false,
+  selectable = false,
+  wideLayout = false,
+  availableWidth = 720,
+  onTaskListItemPress,
+  onHighlightRequest,
+}: MarkdownRendererProps) {
   const scale = sizes[textScale];
+  const segments = useMemo(() => splitMarkdown(content, wideLayout), [content, wideLayout]);
   const reader = darkMode
     ? {
         ink: '#E9ECE7',
@@ -39,9 +151,13 @@ function MarkdownRendererComponent({ content, textScale, darkMode = false }: Mar
         line: '#39423D',
         moss: '#B9D7C4',
         mossSoft: '#26372F',
-        sand: '#252C28',
         quote: '#1C2821',
         code: '#101512',
+        table: '#1A211D',
+        tableAlt: '#202822',
+        tableHead: '#26372F',
+        highlight: '#5A5426',
+        selection: '#789B86',
       }
     : {
         ink: colors.ink,
@@ -49,259 +165,250 @@ function MarkdownRendererComponent({ content, textScale, darkMode = false }: Mar
         line: colors.lineStrong,
         moss: colors.moss,
         mossSoft: colors.mossSoft,
-        sand: colors.sand,
         quote: '#EEF2ED',
         code: '#202622',
+        table: colors.paperStrong,
+        tableAlt: '#F7F6F1',
+        tableHead: colors.sand,
+        highlight: '#F2E9A9',
+        selection: '#A8CAB4',
       };
-  const markdownStyles = useMemo(
+  const markdownStyle = useMemo<MarkdownStyle>(
     () => ({
-      body: {
+      paragraph: {
         color: reader.ink,
         fontFamily: fonts.regular,
         fontSize: scale.body,
         lineHeight: scale.line,
+        marginTop: 6,
+        marginBottom: 13,
       },
-      heading1: {
-        marginTop: 12,
-        marginBottom: 15,
+      h1: {
         color: reader.ink,
         fontFamily: fonts.semibold,
         fontSize: scale.h1,
         lineHeight: scale.h1 * 1.14,
-        letterSpacing: -1.15,
+        marginTop: 12,
+        marginBottom: 15,
       },
-      heading2: {
-        marginTop: 34,
-        marginBottom: 10,
+      h2: {
         color: reader.ink,
         fontFamily: fonts.semibold,
         fontSize: scale.h2,
         lineHeight: scale.h2 * 1.22,
-        letterSpacing: -0.65,
+        marginTop: 34,
+        marginBottom: 10,
       },
-      heading3: {
-        marginTop: 27,
-        marginBottom: 7,
+      h3: {
         color: reader.ink,
         fontFamily: fonts.semibold,
         fontSize: scale.h3,
         lineHeight: scale.h3 * 1.3,
-        letterSpacing: -0.35,
+        marginTop: 27,
+        marginBottom: 7,
       },
-      heading4: {
-        marginTop: 20,
-        marginBottom: 5,
+      h4: {
         color: reader.ink,
         fontFamily: fonts.semibold,
         fontSize: scale.body,
         lineHeight: scale.line,
+        marginTop: 20,
+        marginBottom: 5,
       },
-      paragraph: {
-        marginTop: 6,
-        marginBottom: 13,
-        flexWrap: 'wrap' as const,
-        flexDirection: 'row' as const,
-        alignItems: 'flex-start' as const,
-        width: '100%' as const,
+      h5: {
+        color: reader.inkSoft,
+        fontFamily: fonts.semibold,
+        fontSize: Math.max(13, scale.body - 1),
+        lineHeight: scale.line,
+        marginTop: 18,
+        marginBottom: 5,
+      },
+      h6: {
+        color: reader.inkSoft,
+        fontFamily: fonts.semibold,
+        fontSize: Math.max(12, scale.body - 2),
+        lineHeight: scale.line,
+        marginTop: 16,
+        marginBottom: 5,
       },
       strong: {
         color: reader.ink,
         fontFamily: fonts.semibold,
-        fontWeight: '600' as const,
       },
-      em: { fontStyle: 'italic' as const },
+      em: {
+        color: reader.ink,
+        fontFamily: fonts.regular,
+      },
       link: {
         color: reader.moss,
-        textDecorationLine: 'underline' as const,
-        textDecorationColor: reader.mossSoft,
+        underline: true,
       },
       blockquote: {
-        marginVertical: 15,
-        marginLeft: 0,
-        paddingVertical: 13,
-        paddingHorizontal: 17,
-        borderLeftWidth: 3,
-        borderLeftColor: reader.moss,
-        borderRadius: 2,
+        color: reader.inkSoft,
+        fontFamily: fonts.regular,
+        fontSize: scale.body,
+        lineHeight: scale.line,
+        marginTop: 15,
+        marginBottom: 15,
+        borderColor: reader.moss,
+        borderWidth: 3,
+        gapWidth: 17,
         backgroundColor: reader.quote,
       },
-      bullet_list: { marginVertical: 8 },
-      ordered_list: { marginVertical: 8 },
-      list_item: { marginBottom: 6, flexDirection: 'row' as const },
-      bullet_list_icon: { marginLeft: 5, marginRight: 10, color: reader.moss },
-      ordered_list_icon: { marginLeft: 4, marginRight: 9, color: reader.moss },
-      code_inline: {
-        paddingHorizontal: 5,
-        paddingVertical: 2,
-        borderWidth: 0,
-        borderRadius: 6,
+      list: {
+        color: reader.ink,
+        fontFamily: fonts.regular,
+        fontSize: scale.body,
+        lineHeight: scale.line,
+        marginTop: 8,
+        marginBottom: 13,
+        marginLeft: 20,
+        markerMinWidth: 24,
+        gapWidth: 8,
+        bulletColor: reader.moss,
+        markerColor: reader.moss,
+        markerFontWeight: '600',
+      },
+      code: {
         color: darkMode ? '#D7E9DD' : '#24483A',
         backgroundColor: reader.mossSoft,
+        borderColor: reader.mossSoft,
         fontFamily: fonts.mono,
         fontSize: Math.max(12, scale.body - 3),
       },
-      code_block: {
-        marginVertical: 15,
-        padding: 17,
-        borderWidth: 0,
-        borderRadius: radii.sm,
+      codeBlock: {
         color: '#E8EEE9',
         backgroundColor: reader.code,
+        borderColor: darkMode ? '#303933' : '#202622',
+        borderWidth: darkMode ? 1 : 0,
+        borderRadius: radii.sm,
+        padding: 17,
         fontFamily: fonts.mono,
         fontSize: Math.max(11.5, scale.body - 4.5),
         lineHeight: Math.max(19, scale.line - 9),
+        marginTop: 15,
+        marginBottom: 15,
       },
-      fence: {
-        marginVertical: 15,
-        padding: 17,
-        borderWidth: 0,
-        borderRadius: radii.sm,
-        color: '#E8EEE9',
-        backgroundColor: reader.code,
-        fontFamily: fonts.mono,
-        fontSize: Math.max(11.5, scale.body - 4.5),
-        lineHeight: Math.max(19, scale.line - 9),
+      thematicBreak: {
+        color: reader.line,
+        height: 1,
+        marginTop: 28,
+        marginBottom: 28,
       },
-      hr: { height: 1, marginVertical: 28, backgroundColor: reader.line },
       table: {
-        borderWidth: 0,
-      },
-      thead: {},
-      tr: {},
-      th: {
-        color: reader.ink,
-        fontFamily: fonts.semibold,
-        fontSize: scale.tableHead,
-        lineHeight: scale.tableLine,
-      },
-      td: {
         color: reader.ink,
         fontFamily: fonts.regular,
         fontSize: scale.table,
         lineHeight: scale.tableLine,
+        marginTop: 18,
+        marginBottom: 18,
+        headerFontFamily: fonts.semibold,
+        headerBackgroundColor: reader.tableHead,
+        headerTextColor: reader.ink,
+        rowEvenBackgroundColor: reader.table,
+        rowOddBackgroundColor: reader.tableAlt,
+        borderColor: reader.line,
+        borderWidth: 1,
+        borderRadius: radii.md,
+        cellPaddingHorizontal: 13,
+        cellPaddingVertical: 10,
       },
-      image: { flex: 1, borderRadius: 12 },
+      taskList: {
+        checkedColor: reader.moss,
+        borderColor: reader.line,
+        checkmarkColor: darkMode ? '#141816' : colors.paperStrong,
+        checkedTextColor: reader.inkSoft,
+        checkedStrikethrough: true,
+      },
+      highlight: {
+        color: reader.ink,
+        backgroundColor: reader.highlight,
+      },
+      spoiler: {
+        color: reader.inkSoft,
+        solid: { borderRadius: 6 },
+      },
     }),
     [darkMode, reader, scale],
   );
-
-  const rules = useMemo(
+  const rendererFlags = useMemo(
     () => ({
-      fence: (node: { key: string; content: string; sourceInfo?: string }) => {
-        // Markdown-It allows optional metadata after the language. Only the
-        // first token identifies the language (for example: ts title="app.ts").
-        const language = (node.sourceInfo || '').trim().split(/\s+/)[0]?.toLowerCase() || '';
-        if (language === 'mermaid') {
-          return <MermaidDiagram key={node.key} source={node.content} darkMode={darkMode} />;
-        }
-
-        return (
-          <CodeBlock
-            key={node.key}
-            code={node.content}
-            language={language}
-            darkMode={darkMode}
-            textScale={textScale}
-          />
-        );
-      },
-      code_block: (node: { key: string; content: string }) => (
-        <CodeBlock key={node.key} code={node.content} darkMode={darkMode} textScale={textScale} />
-      ),
-      table: (node: { key: string }, children: React.ReactNode) => (
-        <View key={node.key} style={[styles.tableShell, darkMode && styles.tableShellDark]}>
-          <View style={[styles.tableHint, darkMode && styles.tableHintDark]}>
-            <Text style={[styles.tableHintLabel, darkMode && styles.tableHintLabelDark]}>TABLE</Text>
-            <Text style={[styles.tableHintCopy, darkMode && styles.tableHintCopyDark]}>
-              Swipe sideways to see all columns →
-            </Text>
-          </View>
-          <ScrollView
-            horizontal
-            nestedScrollEnabled
-            showsHorizontalScrollIndicator
-            contentContainerStyle={styles.tableScrollContent}
-          >
-            <View>{children}</View>
-          </ScrollView>
-        </View>
-      ),
-      thead: (node: { key: string }, children: React.ReactNode) => (
-        <View key={node.key} style={[styles.tableHead, darkMode && styles.tableHeadDark]}>
-          {children}
-        </View>
-      ),
-      tbody: (node: { key: string }, children: React.ReactNode) => (
-        <View key={node.key}>{children}</View>
-      ),
-      tr: (node: { key: string; index: number }, children: React.ReactNode) => (
-        <View
-          key={node.key}
-          style={[
-            styles.tableRow,
-            darkMode && styles.tableRowDark,
-            node.index % 2 === 1 && styles.tableRowAlternate,
-            darkMode && node.index % 2 === 1 && styles.tableRowAlternateDark,
-          ]}
-        >
-          {children}
-        </View>
-      ),
-      th: (
-        node: { key: string; index: number },
-        children: React.ReactNode,
-        parents: { children?: unknown[] }[],
-      ) => {
-        const count = parents[0]?.children?.length || 1;
-        return (
-          <View
-            key={node.key}
-            style={[
-              styles.tableCell,
-              styles.tableHeaderCell,
-              darkMode && styles.tableCellDark,
-              { width: tableColumnWidth(node.index, count, textScale) },
-            ]}
-          >
-            {children}
-          </View>
-        );
-      },
-      td: (
-        node: { key: string; index: number },
-        children: React.ReactNode,
-        parents: { children?: unknown[] }[],
-      ) => {
-        const count = parents[0]?.children?.length || 1;
-        return (
-          <View
-            key={node.key}
-            style={[
-              styles.tableCell,
-              darkMode && styles.tableCellDark,
-              { width: tableColumnWidth(node.index, count, textScale) },
-            ]}
-          >
-            {children}
-          </View>
-        );
-      },
+      highlight: true,
+      superscript: true,
+      subscript: true,
+      // Native math needs an iOS dynamic-framework setup. Keep release builds
+      // portable and treat currency and other dollar-sign text literally.
+      latexMath: false,
     }),
-    [darkMode, textScale],
+    [],
   );
+  const nativeSelectionProps =
+    Platform.OS === 'web'
+      ? {}
+      : {
+          flavor: 'github' as const,
+          selectionHandleColor: reader.moss,
+          selectionMenuConfig: {
+            copy: { label: 'Copy' },
+            copyAsMarkdown: { enabled: true, label: 'Copy as Markdown' },
+            copyImageUrl: { enabled: true, label: 'Copy image URL' },
+          },
+          textBreakStrategy: 'highQuality' as const,
+        };
+  const proseWidth = Math.min(760, Math.max(1, availableWidth));
 
   return (
-    <Markdown
-      markdownit={markdownParser}
-      rules={rules}
-      style={markdownStyles}
-      onLinkPress={(url) => {
-        void Linking.openURL(url);
-        return false;
-      }}
-    >
-      {content}
-    </Markdown>
+    <View style={styles.root}>
+      {segments.map((segment, index) => {
+        if (segment.kind === 'mermaid') {
+          return <MermaidDiagram key={'mermaid-' + index} source={segment.source} darkMode={darkMode} />;
+        }
+
+        const fullWidth = wideLayout && segment.fullWidth;
+        return (
+          <View
+            key={'markdown-' + index}
+            style={[
+              styles.segment,
+              fullWidth ? styles.wideSegment : styles.proseSegment,
+              { maxWidth: fullWidth ? Math.max(1, availableWidth) : wideLayout ? proseWidth : undefined },
+            ]}
+          >
+            <EnrichedMarkdownText
+              markdown={segment.markdown}
+              markdownStyle={markdownStyle}
+              containerStyle={RENDERER_CONTAINER_STYLE}
+              selectable={selectable}
+              selectionColor={reader.selection}
+              allowTrailingMargin={index < segments.length - 1}
+              md4cFlags={rendererFlags}
+              onLinkPress={({ url }) => {
+                void Linking.openURL(url).catch(() => undefined);
+              }}
+              onTaskListItemPress={
+                onTaskListItemPress
+                  ? ({ index: taskIndex, checked, text }) =>
+                      onTaskListItemPress({ index: segment.taskOffset + taskIndex, checked, text })
+                  : undefined
+              }
+              contextMenuItems={
+                onHighlightRequest && selectable
+                  ? [
+                      {
+                        text: 'Highlight',
+                        onPress: ({ text: selectedText }) => {
+                          onHighlightRequest(segment.markdown, segment.sourceOffset, selectedText);
+                        },
+                      },
+                    ]
+                  : undefined
+              }
+              {...nativeSelectionProps}
+            />
+          </View>
+        );
+      })}
+    </View>
   );
 }
 
@@ -310,86 +417,17 @@ function MarkdownRendererComponent({ content, textScale, darkMode = false }: Mar
 export const MarkdownRenderer = React.memo(MarkdownRendererComponent);
 
 const styles = StyleSheet.create({
-  tableShell: {
+  root: {
     width: '100%',
-    marginVertical: 18,
-    borderWidth: 1,
-    borderColor: colors.lineStrong,
-    borderRadius: radii.md,
-    backgroundColor: colors.paperStrong,
-    overflow: 'hidden',
   },
-  tableShellDark: {
-    borderColor: '#39423D',
-    backgroundColor: '#181E1A',
+  segment: {
+    width: '100%',
+    alignSelf: 'center',
   },
-  tableHint: {
-    height: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 9,
-    paddingHorizontal: 13,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
-    backgroundColor: '#F7F6F1',
+  proseSegment: {
+    alignSelf: 'center',
   },
-  tableHintDark: {
-    borderBottomColor: '#39423D',
-    backgroundColor: '#202822',
-  },
-  tableHintLabel: {
-    color: colors.moss,
-    fontFamily: fonts.semibold,
-    fontSize: 8,
-    letterSpacing: 1.1,
-  },
-  tableHintLabelDark: {
-    color: '#B9D7C4',
-  },
-  tableHintCopy: {
-    color: colors.inkFaint,
-    fontFamily: fonts.medium,
-    fontSize: 9.5,
-  },
-  tableHintCopyDark: {
-    color: '#909B94',
-  },
-  tableScrollContent: {
-    minWidth: '100%',
-  },
-  tableHead: {
-    backgroundColor: colors.sand,
-  },
-  tableHeadDark: {
-    backgroundColor: '#26312A',
-  },
-  tableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.line,
-  },
-  tableRowDark: {
-    borderBottomColor: '#333C36',
-  },
-  tableRowAlternate: {
-    backgroundColor: '#FAF9F6',
-  },
-  tableRowAlternateDark: {
-    backgroundColor: '#161B18',
-  },
-  tableCell: {
-    minHeight: 48,
-    justifyContent: 'center',
-    paddingHorizontal: 13,
-    paddingVertical: 10,
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: colors.line,
-  },
-  tableCellDark: {
-    borderRightColor: '#333C36',
-  },
-  tableHeaderCell: {
-    minHeight: 45,
-    paddingVertical: 8,
+  wideSegment: {
+    alignSelf: 'stretch',
   },
 });

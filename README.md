@@ -54,11 +54,11 @@ Marden is useful for saving:
 
 | | |
 | --- | --- |
-| **Capture without friction** | Import `.md` and `.markdown` files, or open the built-in editor to type or paste content from another app. Preview the result before saving. |
+| **Capture without friction** | Capture copied text into a titled Markdown preview, open `.md` files directly with Marden from Android, iOS, or the macOS app, import files, or write from scratch. |
 | **Organize your way** | Group documents into colour-coded projects, keep loose thoughts in Unfiled, search the library, favourite important files, and jump back into recent reading. |
 | **Make Markdown feel native** | Read headings, quotes, lists, links, code, phone-friendly tables, and supported Mermaid flowcharts in a polished mobile layout. |
 | **Stay comfortable for longer** | Switch between light and dark themes, adjust type, open a document outline, use focus mode, and resume from saved reading progress. |
-| **Keep your writing private** | No account, ads, analytics SDK, or developer-operated content service. Your library is stored in Marden's private app directory on your device. |
+| **Keep your writing private** | No account, ads, or analytics SDKs. Your library stays local until you explicitly sign in to private cloud sync, export a backup, or share a file. |
 
 ## Install Marden
 
@@ -101,7 +101,7 @@ Marden is built with React Native, Expo SDK 57, and TypeScript.
 
 ### Development
 
-Requirements: Node.js 22.13+ and Expo Go on a physical phone.
+Requirements: Node.js 22.13+ and a Marden development build on a physical phone for native file sharing, app links, and Google sign-in.
 
 ```bash
 git clone https://github.com/guyoverclocked/marden.git
@@ -110,7 +110,18 @@ npm install
 npm start
 ```
 
-Scan the QR code with Expo Go while the computer and phone are on the same network. If LAN discovery is blocked, use `npx expo start --go --tunnel`.
+Create and install a development build first with `npm run build:ios:dev` or the EAS Android development profile, then connect it to the development server. Expo Go is suitable for basic UI checks only; it does not include Marden's custom file associations, iOS share extension, or production OAuth callback.
+
+### Optional cloud sync configuration
+
+1. Create a Supabase project and run [`supabase/schema.sql`](supabase/schema.sql) in the SQL Editor.
+2. Copy `.env.example` to `.env`, then set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`. Never commit `.env`.
+3. Enable Google in Supabase Auth. In Google Cloud, add the Supabase callback URL shown in the provider settings and save the client ID and secret there.
+4. In Supabase Auth URL settings, allow `marden://auth`, `marden://app/**`, and each web URL you use for development or production.
+
+Cloud sync is optional. Do not run a production build until the Supabase schema and Google redirect settings are configured.
+
+After installing a build that includes Marden's file associations, choose **Open with Marden** (Android), **Open in Marden** (iOS), or make Marden the default app for `.md` files on macOS. Each file is imported as a local Marden copy and opened in the reader; the original file is never changed.
 
 ### Verify the project
 
@@ -135,9 +146,9 @@ For a credential-free local test APK on macOS with Java 17 and Android SDK 36 in
 npm run build:apk:local
 ```
 
-The local script names the result from the app version—for this release, `artifacts/Marden-1.0.3.apk`. Production Android and iOS builds are available through `npm run build:android` and `npm run build:ios`.
+The local script names the result from the app version—for this release, `artifacts/Marden-2.0.0.apk`. Production Android and iOS builds are available through `npm run build:android` and `npm run build:ios`.
 
-### Build the Apple Silicon Mac app
+### Build desktop apps and publish desktop updates
 
 On an Apple Silicon Mac with Node.js 22.13 or newer:
 
@@ -145,7 +156,15 @@ On an Apple Silicon Mac with Node.js 22.13 or newer:
 npm run build:mac
 ```
 
-This exports the Expo web target and packages it as `artifacts/macos/Marden-1.0.3-macOS-arm64.dmg`.
+This exports the Expo web target and packages universal macOS artifacts. Use `npm run build:win` for Windows or `npm run build:desktop` for both.
+
+To publish desktop updates through GitHub Releases, authenticate the GitHub CLI or provide a `GH_TOKEN` with repository release permission, then run:
+
+```bash
+npm run publish:desktop
+```
+
+The release must include Electron Builder's generated `latest.yml` and `latest-mac.yml` metadata as well as the installers. macOS automatic updates require a signed application; unsigned test builds can still be downloaded manually from GitHub Releases.
 
 ## Contributing
 

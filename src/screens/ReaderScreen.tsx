@@ -3,23 +3,31 @@ import {
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import * as Clipboard from 'expo-clipboard';
 import { StatusBar } from 'expo-status-bar';
 import Storage from '@react-native-async-storage/async-storage';
 import {
   ALargeSmall,
+  ArrowDown,
+  ArrowUp,
   ChevronLeft,
+  Copy,
+  Highlighter,
   ListTree,
   Maximize2,
   Minimize2,
   Moon,
+  Search as SearchIcon,
   Star,
   Sun,
   X,
@@ -29,7 +37,15 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { colors, fonts, radii, shadow } from '../theme';
 import { MarkdownDocument, TextScale } from '../types';
-import { extractHeadings, formatRelativeDate, readMinutes } from '../utils/markdown';
+import {
+  addMarkdownHighlight,
+  extractHeadings,
+  formatRelativeDate,
+  getSearchMatches,
+  plainTextFromMarkdown,
+  readMinutes,
+  setTaskListItemChecked,
+} from '../utils/markdown';
 
 type ReaderScreenProps = {
   document: MarkdownDocument;
@@ -38,6 +54,7 @@ type ReaderScreenProps = {
   onToggleDarkMode: () => void;
   onToggleFavorite: () => void;
   onProgress: (progress: number) => void;
+  onDocumentContentChange: (content: string) => void;
 };
 
 const scales: TextScale[] = ['compact', 'comfortable', 'large'];
@@ -50,22 +67,40 @@ export function ReaderScreen({
   onToggleDarkMode,
   onToggleFavorite,
   onProgress,
+  onDocumentContentChange,
 }: ReaderScreenProps) {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const desktop = windowWidth >= 900;
   const scrollRef = useRef<ScrollView>(null);
+  const searchInputRef = useRef<TextInput>(null);
   const restoredRef = useRef(false);
   const contentHeightRef = useRef(0);
   const viewportHeightRef = useRef(0);
   const liveProgressRef = useRef(document.readingProgress);
   const persistedProgressRef = useRef(document.readingProgress);
   const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const visualProgressFrameRef = useRef<number | null>(null);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [progress, setProgress] = useState(document.readingProgress);
   const [textScale, setTextScale] = useState<TextScale>('comfortable');
   const [focusMode, setFocusMode] = useState(false);
   const [outlineOpen, setOutlineOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [matchIndex, setMatchIndex] = useState(0);
+  const [webSelectedText, setWebSelectedText] = useState('');
   const headings = useMemo(() => extractHeadings(document.content), [document.content]);
+  const contentWidth = desktop ? Math.min(1180, Math.max(1, windowWidth - 48)) : Math.min(720, Math.max(1, windowWidth - 46));
+  const searchResult = useMemo(
+    () => getSearchMatches(document.content, searchQuery),
+    [document.content, searchQuery],
+  );
+  const searchMatches = searchResult.matches;
+  const visibleContent = searchActive && searchQuery.trim()
+    ? searchResult.patchedContent
+    : document.content;
 
   useEffect(() => {
     restoredRef.current = false;
@@ -84,9 +119,33 @@ export function ReaderScreen({
   useEffect(
     () => () => {
       if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      if (visualProgressFrameRef.current !== null) cancelAnimationFrame(visualProgressFrameRef.current);
     },
     [],
   );
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return undefined;
+    const handler = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'f') {
+        event.preventDefault();
+        setSearchActive(true);
+        setTimeout(() => searchInputRef.current?.focus(), 50);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // Browser-based readers cannot extend the system selection menu. Keep the
+  // selection so the visible Highlight tool can act on it after mouse-up.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return undefined;
+    const trackSelection = () => setWebSelectedText(window.getSelection?.()?.toString() ?? '');
+    globalThis.document.addEventListener('selectionchange', trackSelection);
+    return () => globalThis.document.removeEventListener('selectionchange', trackSelection);
+  }, []);
 
   const restorePosition = () => {
     if (restoredRef.current || document.readingProgress <= 0 || contentHeightRef.current <= viewportHeightRef.current) {
@@ -109,11 +168,17 @@ export function ReaderScreen({
     return Math.min(1, Math.max(0, contentOffset.y / available));
   };
 
-  // Keep continuous scrolling off React's render path. The reader used to
-  // update both local state and the entire library for every scroll event,
-  // which forced large Markdown documents to reconcile while moving.
+  // The visual indicator follows every scroll input, including mouse wheels
+  // on macOS. A frame throttle keeps Markdown reconciliation out of the
+  // scroll path, while persistence remains debounced below.
   const trackScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     liveProgressRef.current = progressFromEvent(event);
+    if (visualProgressFrameRef.current !== null) return;
+    visualProgressFrameRef.current = requestAnimationFrame(() => {
+      visualProgressFrameRef.current = null;
+      const next = liveProgressRef.current;
+      setProgress((current) => (Math.abs(current - next) >= 0.001 ? next : current));
+    });
   };
 
   const commitProgress = (event?: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -168,6 +233,61 @@ export function ReaderScreen({
   const toggleDarkMode = () => {
     onToggleDarkMode();
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const closeSearch = () => {
+    setSearchQuery('');
+    setSearchActive(false);
+    setMatchIndex(0);
+  };
+
+  const navigateMatch = (delta: number) => {
+    if (searchMatches.length === 0) return;
+    const next = Math.max(0, Math.min(searchMatches.length - 1, matchIndex + delta));
+    setMatchIndex(next);
+    const match = searchMatches[next];
+    const fraction = match.position / Math.max(1, visibleContent.length);
+    const target = fraction * Math.max(0, contentHeightRef.current - viewportHeightRef.current);
+    requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: target, animated: true }));
+    void Haptics.selectionAsync();
+  };
+
+  const handleHighlightRequest = (segmentMarkdown: string, segmentOffset: number, selectedText: string) => {
+    if (!selectedText.trim()) return;
+    const nextContent = addMarkdownHighlight(
+      document.content,
+      selectedText,
+      segmentOffset + Math.max(0, segmentMarkdown.indexOf(selectedText)),
+    );
+    if (nextContent === document.content) {
+      void Haptics.selectionAsync();
+      return;
+    }
+    onDocumentContentChange(nextContent);
+    setWebSelectedText('');
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const highlightBrowserSelection = () => {
+    handleHighlightRequest(document.content, 0, webSelectedText);
+  };
+
+  const copyDocumentText = async () => {
+    try {
+      const didCopy = await Clipboard.setStringAsync(plainTextFromMarkdown(document.content));
+      if (!didCopy) return;
+      setCopied(true);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => {
+        copiedTimerRef.current = null;
+        setCopied(false);
+      }, 1400);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      // On web, clipboard access can be denied by the embedding browser. Keep
+      // the control quiet rather than falsely confirming a completed copy.
+      setCopied(false);
+    }
   };
 
   const jumpToHeading = (sourceOffset: number) => {
@@ -226,6 +346,63 @@ export function ReaderScreen({
         </View>
       ) : null}
 
+      {searchActive ? (
+        <View style={[styles.searchBar, darkMode && styles.searchBarDark]}>
+          <SearchIcon size={17} color={darkMode ? '#A3ADA6' : colors.inkFaint} />
+          <TextInput
+            ref={searchInputRef}
+            autoFocus
+            value={searchQuery}
+            onChangeText={(text) => {
+              setSearchQuery(text);
+              setMatchIndex(0);
+            }}
+            onSubmitEditing={() => navigateMatch(1)}
+            placeholder="Find in document"
+            placeholderTextColor={darkMode ? '#A3ADA6' : colors.inkFaint}
+            returnKeyType="search"
+            selectionColor={darkMode ? '#B9D7C4' : colors.moss}
+            style={[styles.searchInput, darkMode && styles.searchInputDark]}
+          />
+          {searchMatches.length > 0 ? (
+            <>
+              <Text style={[styles.searchCount, darkMode && styles.searchCountDark]}>
+                {matchIndex + 1}/{searchMatches.length}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Previous match"
+                hitSlop={8}
+                onPress={() => navigateMatch(-1)}
+                style={({ pressed }) => [styles.searchNavButton, pressed && styles.pressed]}
+              >
+                <ArrowUp size={15} color={darkMode ? '#BAC4BD' : colors.inkSoft} />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Next match"
+                hitSlop={8}
+                onPress={() => navigateMatch(1)}
+                style={({ pressed }) => [styles.searchNavButton, pressed && styles.pressed]}
+              >
+                <ArrowDown size={15} color={darkMode ? '#BAC4BD' : colors.inkSoft} />
+              </Pressable>
+            </>
+          ) : searchQuery.trim() ? (
+            <Text style={[styles.searchCount, darkMode && styles.searchCountDark]}>No matches</Text>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close search"
+            hitSlop={10}
+            onPress={closeSearch}
+            style={({ pressed }) => [styles.searchNavButton, pressed && styles.pressed]}
+          >
+            <X size={18} color={darkMode ? '#BAC4BD' : colors.inkSoft} />
+          </Pressable>
+        </View>
+      ) : null}
+
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={[styles.readerScroll, focusMode && styles.readerScrollFocus]}
@@ -237,14 +414,14 @@ export function ReaderScreen({
           viewportHeightRef.current = event.nativeEvent.layout.height;
           restorePosition();
         }}
-        onScroll={trackScroll}
+        onScroll={scheduleProgressCommit}
         onScrollEndDrag={scheduleProgressCommit}
         onMomentumScrollBegin={beginMomentum}
         onMomentumScrollEnd={finishMomentum}
         scrollEventThrottle={100}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.paper}>
+        <View style={[styles.paper, { maxWidth: contentWidth }]}>
           <View style={styles.readerMeta}>
             <View style={[styles.fileBadge, darkMode && styles.fileBadgeDark]}>
               <Text style={[styles.fileBadgeText, darkMode && styles.fileBadgeTextDark]}>MARKDOWN</Text>
@@ -257,7 +434,19 @@ export function ReaderScreen({
               Opened {formatRelativeDate(document.lastOpenedAt).toLowerCase()}
             </Text>
           </View>
-          <MarkdownRenderer content={document.content} textScale={textScale} darkMode={darkMode} />
+          <MarkdownRenderer
+            content={visibleContent}
+            textScale={textScale}
+            darkMode={darkMode}
+            selectable
+            wideLayout={desktop}
+            availableWidth={contentWidth}
+            onTaskListItemPress={({ index, checked }) => {
+              const nextContent = setTaskListItemChecked(document.content, index, checked);
+              if (nextContent !== document.content) onDocumentContentChange(nextContent);
+            }}
+            onHighlightRequest={handleHighlightRequest}
+          />
           <View style={styles.endMark}>
             <View style={[styles.endLine, darkMode && styles.endLineDark]} />
             <Text style={[styles.endGlyph, darkMode && styles.endGlyphDark]}>M↓</Text>
@@ -296,8 +485,32 @@ export function ReaderScreen({
             <ALargeSmall size={21} color={darkMode ? '#BAC4BD' : colors.inkSoft} />
           </ReaderTool>
           <View style={styles.toolbarDivider} />
+          {Platform.OS === 'web' ? (
+            <>
+              <ReaderTool
+                label="Highlight"
+                darkMode={darkMode}
+                disabled={!webSelectedText.trim()}
+                onPress={highlightBrowserSelection}
+              >
+                <Highlighter
+                  size={20}
+                  color={webSelectedText.trim() ? (darkMode ? '#B9D7C4' : colors.moss) : darkMode ? '#55605A' : colors.inkFaint}
+                />
+              </ReaderTool>
+              <View style={styles.toolbarDivider} />
+            </>
+          ) : null}
           <ReaderTool label={darkMode ? 'Light' : 'Dark'} darkMode={darkMode} onPress={toggleDarkMode}>
             {darkMode ? <Sun size={19} color="#D7E9A2" /> : <Moon size={19} color={colors.inkSoft} />}
+          </ReaderTool>
+          <View style={styles.toolbarDivider} />
+          <ReaderTool label="Find" darkMode={darkMode} onPress={() => { setSearchActive(true); setTimeout(() => searchInputRef.current?.focus(), 50); }}>
+            <SearchIcon size={20} color={darkMode ? '#BAC4BD' : colors.inkSoft} />
+          </ReaderTool>
+          <View style={styles.toolbarDivider} />
+          <ReaderTool label={copied ? 'Copied' : 'Copy'} darkMode={darkMode} onPress={() => void copyDocumentText()}>
+            <Copy size={18} color={copied ? (darkMode ? '#D7E9A2' : colors.moss) : darkMode ? '#BAC4BD' : colors.inkSoft} />
           </ReaderTool>
           <View style={styles.toolbarDivider} />
           <ReaderTool label="Focus" darkMode={darkMode} onPress={toggleFocus}>
@@ -367,18 +580,22 @@ type ReaderToolProps = {
   onPress: () => void;
   darkMode: boolean;
   children: React.ReactNode;
+  disabled?: boolean;
 };
 
-function ReaderTool({ label, onPress, darkMode, children }: ReaderToolProps) {
+function ReaderTool({ label, onPress, darkMode, children, disabled = false }: ReaderToolProps) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.toolButton,
-        pressed && styles.toolPressed,
-        pressed && darkMode && styles.toolPressedDark,
+        pressed && !disabled && styles.toolPressed,
+        pressed && !disabled && darkMode && styles.toolPressedDark,
+        disabled && styles.toolDisabled,
       ]}
     >
       {children}
@@ -471,7 +688,6 @@ const styles = StyleSheet.create({
   },
   paper: {
     width: '100%',
-    maxWidth: 720,
     alignSelf: 'center',
   },
   readerMeta: {
@@ -560,10 +776,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(26,31,28,0.98)',
   },
   toolbarShellDesktop: {
-    width: 520,
+    width: 690,
     left: '50%',
     right: undefined,
-    transform: [{ translateX: -260 }],
+    transform: [{ translateX: -345 }],
   },
   toolButton: {
     flex: 1,
@@ -579,10 +795,13 @@ const styles = StyleSheet.create({
   toolPressedDark: {
     backgroundColor: 'rgba(185,215,196,0.1)',
   },
+  toolDisabled: {
+    opacity: 0.5,
+  },
   toolLabel: {
     color: colors.inkSoft,
     fontFamily: fonts.medium,
-    fontSize: 8.5,
+    fontSize: 8,
   },
   toolLabelDark: {
     color: '#B3BDB6',
@@ -591,6 +810,47 @@ const styles = StyleSheet.create({
     width: 1,
     height: 26,
     backgroundColor: 'rgba(28,33,30,0.08)',
+  },
+  searchBar: {
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 13,
+    backgroundColor: 'rgba(251,250,247,0.97)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.line,
+    zIndex: 1,
+  },
+  searchBarDark: {
+    backgroundColor: 'rgba(20,24,22,0.98)',
+    borderBottomColor: '#303833',
+  },
+  searchInput: {
+    flex: 1,
+    height: '100%',
+    marginLeft: 10,
+    color: colors.ink,
+    fontFamily: fonts.regular,
+    fontSize: 15,
+  },
+  searchInputDark: {
+    color: '#E9ECE7',
+  },
+  searchCount: {
+    color: colors.inkFaint,
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    marginRight: 6,
+  },
+  searchCountDark: {
+    color: '#A3ADA6',
+  },
+  searchNavButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   exitFocus: {
     position: 'absolute',
