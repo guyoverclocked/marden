@@ -11,17 +11,18 @@ import {
 } from 'react-native';
 import { Check, FileText, X } from 'lucide-react-native';
 
-import { colors, fonts, radii, shadow } from '../theme';
+import { colors, darkColors, fonts, radii, shadow } from '../theme';
 import { MarkdownDocument } from '../types';
 import { stripExtension } from '../utils/markdown';
 
 type DocumentRenameModalProps = {
   document: MarkdownDocument | null;
+  darkMode: boolean;
   onClose: () => void;
   onSave: (name: string) => void;
 };
 
-export function DocumentRenameModal({ document, onClose, onSave }: DocumentRenameModalProps) {
+export function DocumentRenameModal({ document, darkMode, onClose, onSave }: DocumentRenameModalProps) {
   const inputRef = useRef<TextInput>(null);
   const [name, setName] = useState('');
 
@@ -44,21 +45,21 @@ export function DocumentRenameModal({ document, onClose, onSave }: DocumentRenam
         style={styles.root}
       >
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={styles.card}>
+        <View style={[styles.card, darkMode && styles.cardDark]}>
           <View style={styles.header}>
-            <View style={styles.icon}>
-              <FileText size={20} color={colors.moss} />
+            <View style={[styles.icon, darkMode && styles.iconDark]}>
+              <FileText size={20} color={darkMode ? darkColors.moss : colors.moss} />
             </View>
             <View style={styles.headingCopy}>
-              <Text style={styles.eyebrow}>FILE DETAILS</Text>
-              <Text style={styles.title}>Rename Markdown</Text>
+              <Text style={[styles.eyebrow, darkMode && styles.eyebrowDark]}>FILE DETAILS</Text>
+              <Text style={[styles.title, darkMode && styles.titleDark]}>Rename Markdown</Text>
             </View>
-            <Pressable accessibilityRole="button" accessibilityLabel="Close rename" onPress={onClose} style={styles.close}>
-              <X size={18} color={colors.ink} />
+            <Pressable accessibilityRole="button" accessibilityLabel="Close rename" onPress={onClose} style={[styles.close, darkMode && styles.closeDark]}>
+              <X size={18} color={darkMode ? darkColors.ink : colors.ink} />
             </Pressable>
           </View>
-          <Text style={styles.label}>FILE NAME</Text>
-          <View style={styles.inputShell}>
+          <Text style={[styles.label, darkMode && styles.labelDark]}>FILE NAME</Text>
+          <View style={[styles.inputShell, darkMode && styles.inputShellDark]}>
             <TextInput
               ref={inputRef}
               accessibilityLabel="Markdown file name"
@@ -73,12 +74,12 @@ export function DocumentRenameModal({ document, onClose, onSave }: DocumentRenam
               returnKeyType="done"
               selectionColor={colors.moss}
               selectTextOnFocus
-              style={styles.input}
+              style={[styles.input, darkMode && styles.inputDark]}
               value={name}
             />
-            <Text style={styles.extension}>.md</Text>
+            <Text style={[styles.extension, darkMode && styles.extensionDark]}>.md</Text>
           </View>
-          <Text style={styles.help}>The document stays in the same project. Its contents are unchanged.</Text>
+          <Text style={[styles.help, darkMode && styles.helpDark]}>The document stays in the same project. Its contents are unchanged.</Text>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Save new file name"
@@ -115,6 +116,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.paperStrong,
     ...shadow.floating,
   },
+  cardDark: { backgroundColor: darkColors.paperStrong },
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: 23 },
   icon: {
     width: 43,
@@ -124,11 +126,16 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: colors.mossSoft,
   },
+  iconDark: { backgroundColor: darkColors.mossSoft },
   headingCopy: { flex: 1, paddingLeft: 12 },
   eyebrow: { color: colors.moss, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 1.1 },
+  eyebrowDark: { color: darkColors.moss },
   title: { marginTop: 3, color: colors.ink, fontFamily: fonts.semibold, fontSize: 19, letterSpacing: -0.4 },
+  titleDark: { color: darkColors.ink },
   close: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 19, backgroundColor: colors.sand },
+  closeDark: { backgroundColor: darkColors.mossSoft },
   label: { marginBottom: 7, color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 8, letterSpacing: 1 },
+  labelDark: { color: darkColors.inkSoft },
   inputShell: {
     height: 52,
     flexDirection: 'row',
@@ -138,9 +145,13 @@ const styles = StyleSheet.create({
     borderRadius: radii.sm,
     backgroundColor: colors.paper,
   },
+  inputShellDark: { borderColor: darkColors.moss, backgroundColor: darkColors.paper },
   input: { flex: 1, height: '100%', paddingLeft: 14, color: colors.ink, fontFamily: fonts.medium, fontSize: 14 },
+  inputDark: { color: darkColors.ink },
   extension: { paddingHorizontal: 14, color: colors.inkFaint, fontFamily: fonts.mono, fontSize: 12 },
+  extensionDark: { color: darkColors.inkFaint },
   help: { marginTop: 9, color: colors.inkFaint, fontFamily: fonts.regular, fontSize: 10.5, lineHeight: 15 },
+  helpDark: { color: darkColors.inkFaint },
   save: {
     height: 47,
     flexDirection: 'row',

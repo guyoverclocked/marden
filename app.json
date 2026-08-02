@@ -2,8 +2,8 @@
   "expo": {
     "name": "Marden",
     "slug": "marden",
-    "version": "2.0.1",
-    "runtimeVersion": "2.0.1",
+    "version": "2.0.0",
+    "runtimeVersion": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -12,7 +12,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.marden.reader",
-      "buildNumber": "7",
+      "buildNumber": "8",
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -58,7 +58,7 @@
     },
     "android": {
       "package": "app.marden.reader",
-      "versionCode": 7,
+      "versionCode": 8,
       "permissions": [
         "REQUEST_INSTALL_PACKAGES"
       ],
@@ -174,7 +174,7 @@
       "expo-web-browser"
     ],
     "extra": {
-      "privacy": "Files and library metadata stay on the device unless you explicitly export a backup.",
+      "privacy": "Files and library metadata stay on the device unless you sign in for private sync or explicitly export a backup.",
       "eas": {
         "build": {
           "experimental": {

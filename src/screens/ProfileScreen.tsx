@@ -29,6 +29,7 @@ export function ProfileScreen({ darkMode, onClose }: ProfileScreenProps) {
   const theme = darkMode ? darkColors : colors;
   const { user, isLoading, syncState, signInWithGoogle, signOut, syncNow } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
   const handleSignOut = () => {
@@ -51,6 +52,18 @@ export function ProfileScreen({ darkMode, onClose }: ProfileScreenProps) {
     setSyncing(true);
     await syncNow();
     setSyncing(false);
+  };
+
+  const handleSignIn = async () => {
+    if (signingIn) return;
+    setSigningIn(true);
+    try {
+      await signInWithGoogle();
+    } catch {
+      Alert.alert('Sign-in unavailable', 'Marden could not start Google sign-in. Check your connection and try again.');
+    } finally {
+      setSigningIn(false);
+    }
   };
 
   const syncDotColor = syncState === 'synced'
@@ -164,10 +177,15 @@ export function ProfileScreen({ darkMode, onClose }: ProfileScreenProps) {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Sign in with Google"
-                onPress={() => signInWithGoogle().catch(() => {})}
+                disabled={signingIn}
+                onPress={() => void handleSignIn()}
                 style={({ pressed }) => [styles.googleBtn, pressed && styles.googleBtnPressed]}
               >
-                <Text style={styles.googleBtnText}>Continue with Google</Text>
+                {signingIn ? (
+                  <ActivityIndicator size="small" color={colors.paper} />
+                ) : (
+                  <Text style={styles.googleBtnText}>Continue with Google</Text>
+                )}
               </Pressable>
               <View style={[styles.privacyRow, darkMode && styles.privacyRowDark]}>
                 <Shield size={14} color={theme.inkFaint} />
@@ -179,7 +197,7 @@ export function ProfileScreen({ darkMode, onClose }: ProfileScreenProps) {
           ) : (
             <View style={[styles.section, darkMode && styles.cardDark]}>
               <Text style={[styles.cloudBody, darkMode && styles.textSoftDark]}>
-                Cloud sync is not configured yet. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in your .env file.
+                Cloud sync is unavailable in this build. Your on-device library is still ready to use.
               </Text>
             </View>
           )}

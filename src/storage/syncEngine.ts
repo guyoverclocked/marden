@@ -1,388 +1,568 @@
 /**
- * Cloud sync engine — Last‑Write‑Wins (LWW) strategy.
+ * Durable, bidirectional cloud sync.
  *
- * Single‑user, serial‑access pattern. The user edits on one device at a time.
- * When two devices edit the same doc offline, the later timestamp wins and a
- * conflict copy is created as a safety net.
- *
- * Timestamps:
- *  - `deviceModifiedAt` — device-local time of the last local edit (set by
- *    the app whenever a document/project changes).
- *  - `cloudModifiedAt` — server `modified_at` from the last successful push.
- *  - Push: a doc is pushed when `deviceModifiedAt > cloudModifiedAt` (or it
- *    has never been pushed).
- *  - Merge: remote wins when `cloud.modified_at > deviceModifiedAt`.
+ * Correctness rules:
+ *  - Pull a complete account snapshot before pushing, so a stale device never
+ *    blindly overwrites a change it has not seen.
+ *  - Never use a device clock as a remote cursor. Full, paginated snapshots
+ *    make clock skew and interrupted cursor writes harmless.
+ *  - Keep exact server versions for optimistic updates. Concurrent edits are
+ *    reconciled on an immediate second pass and losing document bodies become
+ *    normal conflict copies, so content is not silently discarded.
+ *  - Retry only transient failures. A partial push is persisted locally with
+ *    its successful acknowledgements, but is reported as an error and never as
+ *    "synced" until every row succeeds.
+ *  - Publish the reconciled snapshot to the running app as well as storage.
  */
 import Storage from '@react-native-async-storage/async-storage';
 import { loadLibrary, loadProjects, saveLibrary, saveProjects } from './libraryStorage';
 import { supabase, isCloudConfigured } from '../supabase';
 import {
   CloudDocument,
-  CloudPreferences,
   CloudProject,
   CloudSyncState,
   MarkdownDocument,
   Project,
   SyncMetadata,
 } from '../types';
-import { wordCount } from '../utils/markdown';
+import {
+  cloneSyncSnapshot,
+  isDocumentDirty,
+  isProjectDirty,
+  mergeCloudDocuments,
+  mergeCloudProjects,
+  SyncLibrarySnapshot,
+  SyncLibraryUpdate,
+} from './syncMerge';
+import { isTransientSyncError, runSyncQuery } from './syncNetwork';
 
 const SYNC_META_KEY = 'marden.sync.meta.v1';
+const AUTO_SYNC_DELAY_MS = 1_500;
+const PAGE_SIZE = 100;
+const CONTENT_BATCH_SIZE = 10;
+const MAX_IMMEDIATE_PASSES = 3;
+const RETRY_BASE_DELAY_MS = 15_000;
+const RETRY_MAX_DELAY_MS = 5 * 60_000;
 
-let syncInProgress = false;
-let syncTimer: ReturnType<typeof setTimeout> | null = null;
-const syncStateListeners = new Set<(state: CloudSyncState) => void>();
-
-const reportSyncState = (
-  state: CloudSyncState,
-  onStateChange?: (state: CloudSyncState) => void,
-) => {
-  onStateChange?.(state);
-  syncStateListeners.forEach((listener) => listener(state));
+type SyncLibraryAdapter = {
+  read: () => SyncLibrarySnapshot | null;
+  apply: (update: SyncLibraryUpdate) => SyncLibrarySnapshot;
 };
 
-// ── public API ────────────────────────────────────────────────────────────
+type CloudDocumentManifest = Omit<CloudDocument, 'content'>;
 
-/**
- * Trigger a full bidirectional sync. Safe to call frequently — in‑flight
- * requests are coalesced and rapid calls are debounced.
- */
-export function requestSync(
-  onStateChange?: (state: CloudSyncState) => void,
-): void {
-  if (!isCloudConfigured()) return;
+const DOCUMENT_MANIFEST_COLUMNS = 'id,user_id,title,file_name,created_at,modified_at,last_opened_at,is_favorite,reading_progress,word_count,project_id,local_id,device_modified_at,deleted_at';
 
-  if (syncTimer) clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => performSync(onStateChange), 3_000);
+let syncTimer: ReturnType<typeof setTimeout> | null = null;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let activeSync: Promise<void> | null = null;
+let rerunRequested = false;
+let transientFailureCount = 0;
+let syncEpoch = 0;
+let libraryAdapter: SyncLibraryAdapter | null = null;
+const syncStateListeners = new Set<(state: CloudSyncState) => void>();
+const activeCallListeners = new Set<(state: CloudSyncState) => void>();
+
+const reportSyncState = (state: CloudSyncState) => {
+  syncStateListeners.forEach((listener) => listener(state));
+  activeCallListeners.forEach((listener) => listener(state));
+};
+
+/** Connect cloud reconciliation to the currently rendered library. */
+export function registerSyncLibraryAdapter(adapter: SyncLibraryAdapter): () => void {
+  libraryAdapter = adapter;
+  return () => {
+    if (libraryAdapter === adapter) libraryAdapter = null;
+  };
 }
 
-/** Perform sync immediately (used on sign‑in and manual "Sync Now"). */
+/**
+ * Debounced automatic sync for local edits. Calls made during a network pass
+ * request another pass, ensuring edits made in flight are not left pending.
+ */
+export function requestSync(onStateChange?: (state: CloudSyncState) => void): void {
+  if (!isCloudConfigured()) return;
+  clearAutomaticRetry();
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    syncTimer = null;
+    void startSync(onStateChange);
+  }, AUTO_SYNC_DELAY_MS);
+}
+
+/** Perform and await sync immediately (launch, sign-in, foreground, or manual). */
 export async function syncNow(
   onStateChange?: (state: CloudSyncState) => void,
 ): Promise<void> {
-  if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; }
-  await performSync(onStateChange);
+  clearAutomaticRetry();
+  if (syncTimer) {
+    clearTimeout(syncTimer);
+    syncTimer = null;
+  }
+  await startSync(onStateChange);
 }
 
 export function cancelPendingSync(): void {
-  if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; }
+  // In-flight requests cannot always be cancelled by the platform fetch
+  // implementation. Invalidating their epoch guarantees their cloned result
+  // is never applied after sign-out or an account switch.
+  syncEpoch += 1;
+  rerunRequested = false;
+  clearAutomaticRetry(true);
+  if (syncTimer) {
+    clearTimeout(syncTimer);
+    syncTimer = null;
+  }
 }
 
-/** Subscribe to every automatic or manual sync state transition. */
 export function subscribeToSyncState(listener: (state: CloudSyncState) => void): () => void {
   syncStateListeners.add(listener);
   return () => syncStateListeners.delete(listener);
 }
 
-// ── internals ─────────────────────────────────────────────────────────────
+async function startSync(onStateChange?: (state: CloudSyncState) => void): Promise<void> {
+  if (onStateChange) activeCallListeners.add(onStateChange);
+
+  try {
+    if (activeSync) {
+      rerunRequested = true;
+      await activeSync;
+      // An account switch can invalidate the active pass before it consumes
+      // the rerun request. Start a fresh pass for the newly signed-in account.
+      if (rerunRequested && !activeSync) await startSync(onStateChange);
+      return;
+    }
+
+    const run = runSyncLoop(syncEpoch);
+    const trackedRun = run.finally(() => {
+      if (activeSync === trackedRun) activeSync = null;
+    });
+    activeSync = trackedRun;
+    await activeSync;
+  } finally {
+    if (onStateChange) activeCallListeners.delete(onStateChange);
+  }
+}
+
+class SyncCancelledError extends Error {}
+
+const assertSyncEpoch = (expectedEpoch: number) => {
+  if (syncEpoch !== expectedEpoch) throw new SyncCancelledError('Sync was cancelled');
+};
+
+async function runSyncLoop(expectedEpoch: number): Promise<void> {
+  reportSyncState('pending');
+
+  try {
+    let pass = 0;
+    let accountAvailable = true;
+    do {
+      rerunRequested = false;
+      pass += 1;
+      const result = await performSyncPass(expectedEpoch);
+      if (result === 'disconnected') {
+        accountAvailable = false;
+        break;
+      }
+      if (result === 'concurrent') rerunRequested = true;
+    } while (rerunRequested && pass < MAX_IMMEDIATE_PASSES);
+
+    if (!accountAvailable) {
+      reportSyncState('disconnected');
+    } else if (rerunRequested) {
+      throw new Error('Cloud data kept changing during sync; retrying later');
+    } else {
+      transientFailureCount = 0;
+      clearAutomaticRetry();
+      reportSyncState('synced');
+    }
+  } catch (error) {
+    if (error instanceof SyncCancelledError) {
+      reportSyncState('disconnected');
+      return;
+    }
+    console.error('[sync] failed:', error);
+    reportSyncState('error');
+    if (isTransientSyncError(error)) scheduleAutomaticRetry();
+  }
+}
+
+async function performSyncPass(
+  expectedEpoch: number,
+): Promise<'complete' | 'concurrent' | 'disconnected'> {
+  assertSyncEpoch(expectedEpoch);
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  if (!sessionData.session) return 'disconnected';
+
+  const userId = sessionData.session.user.id;
+  const base = await readCurrentLibrary();
+  const working = cloneSyncSnapshot(base);
+
+  // Pull both tables completely. Reads can run together, but projects are
+  // merged first so every downloaded document can resolve its project ID.
+  const [cloudProjects, documentSnapshot] = await Promise.all([
+    pullAllRows<CloudProject>('projects', userId),
+    pullDocuments(userId, working.documents),
+  ]);
+  assertSyncEpoch(expectedEpoch);
+
+  mergeCloudProjects(cloudProjects, working.projects, userId);
+  mergeCloudDocuments(documentSnapshot.documents, working.documents, working.projects, userId);
+
+  const failures: unknown[] = [];
+  let concurrentChange = documentSnapshot.changedDuringPull;
+  let networkUnavailable = false;
+
+  // Projects first: documents uploaded in this pass can safely reference the
+  // project's newly assigned cloud UUID.
+  for (const project of working.projects) {
+    assertSyncEpoch(expectedEpoch);
+    if (!isProjectDirty(project)) continue;
+    try {
+      const outcome = await pushProject(project, userId);
+      if (outcome === 'concurrent') concurrentChange = true;
+    } catch (error) {
+      failures.push(error);
+      console.warn('[sync] push project failed:', error);
+      if (isTransientSyncError(error)) {
+        networkUnavailable = true;
+        break;
+      }
+    }
+  }
+
+  for (const document of networkUnavailable ? [] : [...working.documents]) {
+    assertSyncEpoch(expectedEpoch);
+    if (!isDocumentDirty(document)) continue;
+    if (document.deletedAt && !document.cloudId) {
+      // A document deleted before its first upload needs no remote tombstone.
+      working.documents.splice(working.documents.indexOf(document), 1);
+      continue;
+    }
+
+    const assignedProject = document.projectId
+      ? working.projects.find((project) => project.id === document.projectId)
+      : null;
+    if (document.projectId && !assignedProject?.cloudId) {
+      failures.push(new Error(`Project for ${document.fileName} has not uploaded yet`));
+      continue;
+    }
+
+    try {
+      const outcome = await pushDocument(document, working.projects, userId);
+      if (outcome === 'concurrent') {
+        concurrentChange = true;
+      } else if (document.deletedAt) {
+        working.documents.splice(working.documents.indexOf(document), 1);
+      }
+    } catch (error) {
+      failures.push(error);
+      console.warn('[sync] push document failed:', error);
+      if (isTransientSyncError(error)) {
+        networkUnavailable = true;
+        break;
+      }
+    }
+  }
+
+  // Apply and persist even after a partial push so successful acknowledgements
+  // and downloaded files survive a crash. The final state remains "error" and
+  // failed dirty rows are retried on the next automatic pass.
+  assertSyncEpoch(expectedEpoch);
+  const persisted = applyToLiveLibrary(base, working);
+  await Promise.all([saveLibrary(persisted.documents), saveProjects(persisted.projects)]);
+
+  const previousMeta = await loadSyncMeta();
+  const previousPushAt = previousMeta?.userId === userId ? previousMeta.lastPushAt : null;
+  await saveSyncMeta({
+    userId,
+    lastPullAt: Date.now(),
+    lastPushAt: failures.length === 0 ? Date.now() : previousPushAt,
+  });
+
+  if (failures.length > 0) {
+    if (networkUnavailable) throw failures[0];
+    throw new Error(`${failures.length} cloud ${failures.length === 1 ? 'operation' : 'operations'} failed after retries`);
+  }
+
+  return concurrentChange ? 'concurrent' : 'complete';
+}
+
+async function readCurrentLibrary(): Promise<SyncLibrarySnapshot> {
+  try {
+    const live = libraryAdapter?.read();
+    if (live) return cloneSyncSnapshot(live);
+  } catch (error) {
+    console.warn('[sync] could not read live library; using durable storage:', error);
+  }
+
+  const [documents, projects] = await Promise.all([loadLibrary(), loadProjects()]);
+  return cloneSyncSnapshot({ documents, projects });
+}
+
+function applyToLiveLibrary(
+  base: SyncLibrarySnapshot,
+  working: SyncLibrarySnapshot,
+): SyncLibrarySnapshot {
+  const synced = cloneSyncSnapshot(working);
+  if (!libraryAdapter) return synced;
+
+  try {
+    return libraryAdapter.apply({ base, synced });
+  } catch (error) {
+    console.warn('[sync] could not update live library; durable copy will be used:', error);
+    return synced;
+  }
+}
+
+async function pullAllRows<T>(table: 'documents' | 'projects', userId: string): Promise<T[]> {
+  const rows: T[] = [];
+  let lastId: string | null = null;
+  for (;;) {
+    const page = await runSyncQuery<T[]>(`pull ${table}`, (signal) => {
+      let query = supabase
+        .from(table)
+        .select('*')
+        .eq('user_id', userId)
+        .order('id', { ascending: true })
+        .limit(PAGE_SIZE);
+      if (lastId) query = query.gt('id', lastId);
+      return query.abortSignal(signal);
+    });
+    const result = page ?? [];
+    rows.push(...result);
+    if (result.length < PAGE_SIZE) break;
+    lastId = (result[result.length - 1] as { id: string }).id;
+  }
+  return rows;
+}
+
+async function pullDocuments(
+  userId: string,
+  localDocuments: MarkdownDocument[],
+): Promise<{ documents: CloudDocument[]; changedDuringPull: boolean }> {
+  const manifests = await pullManifestRows(userId);
+  const contentIds: string[] = [];
+
+  for (const manifest of manifests) {
+    if (manifest.deleted_at) continue;
+    const local = localDocuments.find((document) => document.cloudId === manifest.id)
+      ?? (manifest.local_id
+        ? localDocuments.find((document) => document.id === manifest.local_id)
+        : undefined);
+    const remoteUnchanged = local
+      ? local.cloudVersion
+        ? local.cloudVersion === manifest.modified_at
+        : local.cloudModifiedAt === new Date(manifest.modified_at).getTime()
+      : false;
+
+    if (!local || isDocumentDirty(local) || !remoteUnchanged) contentIds.push(manifest.id);
+  }
+
+  const fullRows = new Map<string, CloudDocument>();
+  for (let index = 0; index < contentIds.length; index += CONTENT_BATCH_SIZE) {
+    const ids = contentIds.slice(index, index + CONTENT_BATCH_SIZE);
+    const rows = await runSyncQuery<CloudDocument[]>('pull document bodies', (signal) =>
+      supabase
+        .from('documents')
+        .select('*')
+        .eq('user_id', userId)
+        .in('id', ids)
+        .order('id', { ascending: true })
+        .abortSignal(signal),
+    );
+    for (const row of rows ?? []) fullRows.set(row.id, row);
+  }
+
+  const contentIdSet = new Set(contentIds);
+  let changedDuringPull = false;
+  const documents: CloudDocument[] = [];
+  for (const manifest of manifests) {
+    const local = localDocuments.find((document) => document.cloudId === manifest.id)
+      ?? (manifest.local_id
+        ? localDocuments.find((document) => document.id === manifest.local_id)
+        : undefined);
+    const full = fullRows.get(manifest.id);
+    if (contentIdSet.has(manifest.id) && !manifest.deleted_at && !full) {
+      // The row changed or was deleted between the manifest and body queries.
+      // An immediate second pass will observe a coherent current version.
+      changedDuringPull = true;
+      continue;
+    }
+    documents.push(full ?? { ...manifest, content: local?.content ?? '' });
+  }
+
+  return { documents, changedDuringPull };
+}
+
+async function pullManifestRows(userId: string): Promise<CloudDocumentManifest[]> {
+  const rows: CloudDocumentManifest[] = [];
+  let lastId: string | null = null;
+  for (;;) {
+    const page = await runSyncQuery<CloudDocumentManifest[]>('pull document manifest', (signal) => {
+      let query = supabase
+        .from('documents')
+        .select(DOCUMENT_MANIFEST_COLUMNS)
+        .eq('user_id', userId)
+        .order('id', { ascending: true })
+        .limit(PAGE_SIZE);
+      if (lastId) query = query.gt('id', lastId);
+      return query.abortSignal(signal);
+    });
+    const result = page ?? [];
+    rows.push(...result);
+    if (result.length < PAGE_SIZE) break;
+    lastId = result[result.length - 1].id;
+  }
+  return rows;
+}
+
+async function pushProject(
+  project: Project,
+  userId: string,
+): Promise<'pushed' | 'concurrent'> {
+  const deviceModified = safeMillis(project.deviceModifiedAt, safeMillis(project.createdAt));
+  const nextVersion = new Date().toISOString();
+  const values = {
+    user_id: userId,
+    local_id: project.id,
+    name: project.name,
+    color: project.color,
+    modified_at: nextVersion,
+    deleted_at: null,
+  };
+
+  let data: { id: string; modified_at: string } | null;
+  if (project.cloudId && project.cloudVersion) {
+    data = await runSyncQuery<{ id: string; modified_at: string }>('update project', (signal) =>
+      supabase
+        .from('projects')
+        .update(values)
+        .eq('id', project.cloudId!)
+        .eq('user_id', userId)
+        .eq('modified_at', project.cloudVersion!)
+        .select('id, modified_at')
+        .abortSignal(signal)
+        .maybeSingle(),
+    );
+    if (!data) return 'concurrent';
+  } else {
+    data = await runSyncQuery<{ id: string; modified_at: string }>('insert project', (signal) =>
+      supabase
+        .from('projects')
+        .upsert(values, { onConflict: 'user_id,local_id' })
+        .select('id, modified_at')
+        .abortSignal(signal)
+        .single(),
+    );
+  }
+
+  if (!data) throw new Error('Project upload returned no acknowledgement');
+  project.cloudId = data.id;
+  project.cloudUserId = userId;
+  project.cloudVersion = data.modified_at;
+  project.cloudModifiedAt = new Date(data.modified_at).getTime();
+  project.syncedDeviceModifiedAt = deviceModified;
+  return 'pushed';
+}
+
+async function pushDocument(
+  document: MarkdownDocument,
+  projects: Project[],
+  userId: string,
+): Promise<'pushed' | 'concurrent'> {
+  const deviceModified = safeMillis(document.deviceModifiedAt, safeMillis(document.modifiedAt));
+  const nextVersion = new Date().toISOString();
+  const cloudProjectId = document.projectId
+    ? projects.find((project) => project.id === document.projectId)?.cloudId ?? null
+    : null;
+  const values = {
+    user_id: userId,
+    local_id: document.id,
+    title: document.title,
+    file_name: document.fileName,
+    content: document.content,
+    is_favorite: document.isFavorite,
+    reading_progress: document.readingProgress,
+    word_count: document.wordCount,
+    project_id: cloudProjectId,
+    device_modified_at: new Date(deviceModified).toISOString(),
+    modified_at: nextVersion,
+    last_opened_at: new Date(safeMillis(document.lastOpenedAt, deviceModified)).toISOString(),
+    deleted_at: document.deletedAt
+      ? new Date(safeMillis(document.deletedAt, deviceModified)).toISOString()
+      : null,
+  };
+
+  let data: { id: string; modified_at: string } | null;
+  if (document.cloudId && document.cloudVersion) {
+    data = await runSyncQuery<{ id: string; modified_at: string }>('update document', (signal) =>
+      supabase
+        .from('documents')
+        .update(values)
+        .eq('id', document.cloudId!)
+        .eq('user_id', userId)
+        .eq('modified_at', document.cloudVersion!)
+        .select('id, modified_at')
+        .abortSignal(signal)
+        .maybeSingle(),
+    );
+    if (!data) return 'concurrent';
+  } else {
+    data = await runSyncQuery<{ id: string; modified_at: string }>('insert document', (signal) =>
+      supabase
+        .from('documents')
+        .upsert(values, { onConflict: 'user_id,local_id' })
+        .select('id, modified_at')
+        .abortSignal(signal)
+        .single(),
+    );
+  }
+
+  if (!data) throw new Error('Document upload returned no acknowledgement');
+  document.cloudId = data.id;
+  document.cloudUserId = userId;
+  document.cloudVersion = data.modified_at;
+  document.cloudModifiedAt = new Date(data.modified_at).getTime();
+  document.syncedDeviceModifiedAt = deviceModified;
+  return 'pushed';
+}
 
 async function loadSyncMeta(): Promise<SyncMetadata | null> {
   try {
     const raw = await Storage.getItem(SYNC_META_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+    return raw ? JSON.parse(raw) as SyncMetadata : null;
+  } catch {
+    return null;
+  }
 }
 
 async function saveSyncMeta(meta: SyncMetadata): Promise<void> {
   await Storage.setItem(SYNC_META_KEY, JSON.stringify(meta));
 }
 
-async function performSync(
-  onStateChange?: (state: CloudSyncState) => void,
-): Promise<void> {
-  if (syncInProgress) return;
-  syncInProgress = true;
+const safeMillis = (value: number | undefined, fallback = Date.now()) =>
+  typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 
-  try {
-    const session = await supabase.auth.getSession();
-    if (!session.data.session) { reportSyncState('disconnected', onStateChange); return; }
-
-    reportSyncState('pending', onStateChange);
-
-    const userId = session.data.session.user.id;
-    // Sync cursors are scoped to an account. Reusing one user's cursor for a
-    // different account would skip that account's pre-existing library.
-    const storedMeta = await loadSyncMeta();
-    const meta = storedMeta?.userId === userId ? storedMeta : null;
-    const documents = await loadLibrary();
-    const projects = await loadProjects();
-
-    // ── PUSH: upload local changes that are newer than remote ──────────
-    const now = Date.now();
-
-    let pushFailure: Error | null = null;
-
-    // Projects must be uploaded first so documents can reference their cloud
-    // UUID in the same sync pass.
-    for (const project of projects) {
-      const deviceModified = project.deviceModifiedAt ?? project.createdAt;
-      const cloudModified = project.cloudModifiedAt ?? 0;
-      if (project.cloudId && deviceModified <= cloudModified) continue;
-
-      const { data, error } = await supabase.from('projects').upsert(
-        {
-          ...(project.cloudId ? { id: project.cloudId } : {}),
-          user_id: userId,
-          local_id: project.id,
-          name: project.name,
-          color: project.color,
-          modified_at: new Date(now).toISOString(),
-          deleted_at: null,
-        },
-        { onConflict: project.cloudId ? 'id' : 'user_id,local_id' },
-      ).select('id, modified_at').single();
-
-      if (error) {
-        console.warn('[sync] push project failed:', error);
-        pushFailure = error;
-        continue;
-      }
-
-      project.cloudId = data.id;
-      project.cloudModifiedAt = new Date(data.modified_at).getTime();
-    }
-
-    // Upsert documents after projects, including both the authenticated owner
-    // and soft-delete tombstones. Never clear a tombstone accidentally.
-    for (const doc of documents) {
-      const deviceModified = doc.deviceModifiedAt ?? doc.modifiedAt;
-      const cloudModified = doc.cloudModifiedAt ?? 0;
-      if (doc.cloudId && deviceModified <= cloudModified) continue;
-
-      const cloudProjectId = doc.projectId
-        ? projects.find((project) => project.id === doc.projectId)?.cloudId ?? null
-        : null;
-      const { data, error } = await supabase.from('documents').upsert(
-        {
-          ...(doc.cloudId ? { id: doc.cloudId } : {}),
-          user_id: userId,
-          local_id: doc.id,
-          title: doc.title,
-          file_name: doc.fileName,
-          content: doc.content,
-          is_favorite: doc.isFavorite,
-          reading_progress: doc.readingProgress,
-          word_count: doc.wordCount,
-          project_id: cloudProjectId,
-          device_modified_at: new Date(deviceModified).toISOString(),
-          modified_at: new Date(now).toISOString(),
-          last_opened_at: new Date(doc.lastOpenedAt).toISOString(),
-          deleted_at: doc.deletedAt ? new Date(doc.deletedAt).toISOString() : null,
-        },
-        { onConflict: doc.cloudId ? 'id' : 'user_id,local_id' },
-      ).select('id, modified_at').single();
-
-      if (error) {
-        console.warn('[sync] push document failed:', error);
-        pushFailure = error;
-        continue;
-      }
-
-      doc.cloudId = data.id;
-      doc.cloudModifiedAt = new Date(data.modified_at).getTime();
-    }
-
-    if (pushFailure) {
-      throw pushFailure;
-    }
-
-    // ── PULL: download remote changes since last sync ──────────────────
-    // Run after push so local edits take precedence and the pull window
-    // starts after this device's changes were uploaded.
-    const { data: changes, error: pullError } = await supabase
-      .rpc('pull_changes_since', {
-        since_timestamp: meta?.lastPullAt
-          ? new Date(meta.lastPullAt).toISOString()
-          : new Date(0).toISOString(),
-        user_uuid: userId,
-      });
-
-    if (pullError) throw pullError;
-
-    // ── MERGE remote changes into local ───────────────────────────────
-    if (changes) {
-      for (const row of changes) {
-        if (row.entity_type === 'document') {
-          mergeDocument(row.entity_data as CloudDocument, documents, projects);
-        } else if (row.entity_type === 'project') {
-          mergeProject(row.entity_data as CloudProject, projects);
-        } else if (row.entity_type === 'preference') {
-          mergePreferences(row.entity_data as CloudPreferences);
-        }
-      }
-    }
-
-    await saveLibrary(documents);
-    await saveProjects(projects);
-    await saveSyncMeta({
-      userId,
-      lastPullAt: Date.now(),
-      lastPushAt: Date.now(),
-    });
-
-    reportSyncState('synced', onStateChange);
-  } catch (err) {
-    console.error('[sync] failed:', err);
-    reportSyncState('error', onStateChange);
-  } finally {
-    syncInProgress = false;
+function clearAutomaticRetry(resetFailureCount = false): void {
+  if (retryTimer) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
   }
+  if (resetFailureCount) transientFailureCount = 0;
 }
 
-// ── merge helpers ─────────────────────────────────────────────────────────
-
-function mergeDocument(
-  cloud: CloudDocument,
-  local: MarkdownDocument[],
-  projects: Project[],
-): void {
-  const existingByCloudId = local.find((d) => d.cloudId === cloud.id);
-  const existingByLocalId = cloud.local_id
-    ? local.find((d) => d.id === cloud.local_id)
-    : undefined;
-  const existing = existingByCloudId || existingByLocalId;
-
-  // Tombstone: remote says the doc was deleted.
-  if (cloud.deleted_at) {
-    if (existing) {
-      const deviceModified = existing.deviceModifiedAt ?? existing.modifiedAt;
-      // Local edits newer than the delete keep the doc (it will be re-pushed).
-      if (deviceModified <= new Date(cloud.deleted_at).getTime()) {
-        const index = local.indexOf(existing);
-        if (index !== -1) local.splice(index, 1);
-      } else if (!existing.cloudId) {
-        existing.cloudId = cloud.id;
-        existing.cloudModifiedAt = new Date(cloud.deleted_at).getTime();
-      }
-    }
-    return;
-  }
-
-  if (!existing) {
-    local.push({
-      id: cloud.local_id || `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-      cloudId: cloud.id,
-      title: cloud.title,
-      fileName: cloud.file_name,
-      content: cloud.content,
-      createdAt: new Date(cloud.created_at).getTime(),
-      modifiedAt: new Date(cloud.modified_at).getTime(),
-      lastOpenedAt: new Date(cloud.last_opened_at).getTime(),
-      isFavorite: cloud.is_favorite,
-      readingProgress: cloud.reading_progress,
-      wordCount: cloud.word_count,
-      projectId: cloud.project_id
-        ? projects.find((project) => project.cloudId === cloud.project_id)?.id ?? null
-        : null,
-      cloudModifiedAt: new Date(cloud.modified_at).getTime(),
-      deviceModifiedAt: cloud.device_modified_at
-        ? new Date(cloud.device_modified_at).getTime()
-        : new Date(cloud.modified_at).getTime(),
-    });
-    return;
-  }
-
-  const cloudModified = new Date(cloud.modified_at).getTime();
-  const deviceModified = existing.deviceModifiedAt ?? existing.modifiedAt;
-
-  if (cloudModified > deviceModified) {
-    // Remote is newer — remote wins. Keep the local edit as a conflict copy
-    // so no work is silently lost.
-    const localHasUnsyncedEdit = deviceModified > (existing.cloudModifiedAt ?? 0);
-    if (localHasUnsyncedEdit) {
-      local.push({
-        ...existing,
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-        cloudId: undefined,
-        cloudModifiedAt: undefined,
-        deviceModifiedAt: deviceModified,
-        title: `${existing.title} (conflict from Device)`,
-        fileName: conflictFileName(existing.fileName),
-      });
-    }
-
-    existing.title = cloud.title;
-    existing.fileName = cloud.file_name;
-    existing.content = cloud.content;
-    existing.isFavorite = cloud.is_favorite;
-    existing.readingProgress = cloud.reading_progress;
-    existing.wordCount = cloud.word_count;
-    existing.projectId = cloud.project_id
-      ? projects.find((project) => project.cloudId === cloud.project_id)?.id ?? null
-      : null;
-    existing.deletedAt = undefined;
-    existing.modifiedAt = cloudModified;
-    existing.lastOpenedAt = new Date(cloud.last_opened_at).getTime();
-    existing.cloudModifiedAt = cloudModified;
-    existing.deviceModifiedAt = cloud.device_modified_at
-      ? new Date(cloud.device_modified_at).getTime()
-      : cloudModified;
-  }
-
-  existing.cloudId = cloud.id;
-  if (!existing.cloudModifiedAt || cloudModified > existing.cloudModifiedAt) {
-    existing.cloudModifiedAt = cloudModified;
-  }
-}
-
-function conflictFileName(fileName: string): string {
-  const match = fileName.match(/^(.*?)(\.[^.]+)?$/);
-  const base = match?.[1] || fileName;
-  const ext = match?.[2] || '.md';
-  return `${base} (conflict from Device)${ext}`;
-}
-
-function mergeProject(cloud: CloudProject, local: Project[]): void {
-  const existingByCloudId = local.find((p) => p.cloudId === cloud.id);
-  const existingByLocalId = cloud.local_id
-    ? local.find((p) => p.id === cloud.local_id)
-    : undefined;
-  const existing = existingByCloudId || existingByLocalId;
-
-  if (cloud.deleted_at) {
-    if (existing) {
-      const deviceModified = existing.deviceModifiedAt ?? existing.createdAt;
-      if (deviceModified <= new Date(cloud.deleted_at).getTime()) {
-        const index = local.indexOf(existing);
-        if (index !== -1) local.splice(index, 1);
-      } else if (!existing.cloudId) {
-        existing.cloudId = cloud.id;
-      }
-    }
-    return;
-  }
-
-  if (!existing) {
-    local.push({
-      id: cloud.local_id || `project-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      name: cloud.name,
-      color: cloud.color,
-      createdAt: new Date(cloud.created_at).getTime(),
-      cloudId: cloud.id,
-      deviceModifiedAt: cloud.modified_at
-        ? new Date(cloud.modified_at).getTime()
-        : new Date(cloud.created_at).getTime(),
-      cloudModifiedAt: cloud.modified_at
-        ? new Date(cloud.modified_at).getTime()
-        : new Date(cloud.created_at).getTime(),
-    });
-    return;
-  }
-
-  const cloudModified = cloud.modified_at
-    ? new Date(cloud.modified_at).getTime()
-    : new Date(cloud.created_at).getTime();
-  const deviceModified = existing.deviceModifiedAt ?? existing.createdAt;
-  if (cloudModified > deviceModified) {
-    existing.name = cloud.name;
-    existing.color = cloud.color;
-    existing.deviceModifiedAt = cloudModified;
-  }
-  existing.cloudId = cloud.id;
-  existing.cloudModifiedAt = Math.max(existing.cloudModifiedAt ?? 0, cloudModified);
-}
-
-function mergePreferences(cloud: CloudPreferences): void {
-  void Storage.setItem('marden.reader.dark.v1', String(cloud.dark_mode));
-  void Storage.setItem('marden.reader.scale.v1', cloud.text_scale);
+function scheduleAutomaticRetry(): void {
+  clearAutomaticRetry();
+  transientFailureCount += 1;
+  const exponentialDelay = Math.min(
+    RETRY_BASE_DELAY_MS * (2 ** Math.max(0, transientFailureCount - 1)),
+    RETRY_MAX_DELAY_MS,
+  );
+  const jitter = Math.floor(Math.random() * Math.min(5_000, exponentialDelay / 4));
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    void startSync();
+  }, exponentialDelay + jitter);
 }

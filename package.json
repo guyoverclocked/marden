@@ -1,6 +1,6 @@
 {
   "name": "marden",
-  "version": "2.0.1",
+  "version": "2.0.0",
   "main": "index.ts",
   "dependencies": {
     "@expo/metro-runtime": "~57.0.8",
@@ -10,7 +10,6 @@
     "electron-updater": "^6.8.9",
     "expo": "~57.0.9",
     "expo-clipboard": "~57.0.1",
-    "expo-dev-client": "~57.0.10",
     "expo-document-picker": "~57.0.1",
     "expo-file-system": "~57.0.0",
     "expo-font": "~57.0.0",
@@ -38,11 +37,12 @@
     "electron": "^43.1.1",
     "electron-builder": "^26.15.3",
     "pod-install": "^1.1.0",
+    "tsx": "^4.23.4",
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "start": "expo start --dev-client",
-    "start:dev": "expo start --dev-client",
+    "start": "expo start",
+    "start:dev": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "ios:device": "expo run:ios --device",
@@ -56,6 +56,8 @@
     "build:desktop": "npm run export:web && electron-builder --projectDir desktop --config electron-builder.yml --mac dmg --win nsis --arm64 --x64",
     "publish:desktop": "npm run build:desktop",
     "generate:assets": "node scripts/generate-icons.js",
+    "test": "tsx --test tests/*.test.mjs",
+    "test:sync": "tsx --test tests/syncMerge.test.mjs",
     "build:apk": "npx eas-cli@latest build --platform android --profile preview",
     "build:apk:local": "bash scripts/build-local-apk.sh",
     "build:android": "npx eas-cli@latest build --platform android --profile production",

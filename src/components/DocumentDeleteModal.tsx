@@ -2,28 +2,29 @@ import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Trash2 } from 'lucide-react-native';
 
-import { colors, fonts, radii, shadow } from '../theme';
+import { colors, darkColors, fonts, radii, shadow } from '../theme';
 import { MarkdownDocument } from '../types';
 
 type DocumentDeleteModalProps = {
   document: MarkdownDocument | null;
+  darkMode: boolean;
   onClose: () => void;
   onConfirm: () => void;
 };
 
-export function DocumentDeleteModal({ document, onClose, onConfirm }: DocumentDeleteModalProps) {
+export function DocumentDeleteModal({ document, darkMode, onClose, onConfirm }: DocumentDeleteModalProps) {
   return (
     <Modal animationType="fade" transparent visible={Boolean(document)} onRequestClose={onClose}>
       <View style={styles.root}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={styles.card}>
-          <View style={styles.icon}>
+        <View style={[styles.card, darkMode && styles.cardDark]}>
+          <View style={[styles.icon, darkMode && styles.iconDark]}>
             <Trash2 size={21} color={colors.error} />
           </View>
           <Text style={styles.eyebrow}>REMOVE FROM MARDEN</Text>
-          <Text style={styles.title}>Delete this file?</Text>
-          <Text numberOfLines={2} style={styles.documentName}>{document?.title}</Text>
-          <Text style={styles.body}>
+          <Text style={[styles.title, darkMode && styles.titleDark]}>Delete this file?</Text>
+          <Text numberOfLines={2} style={[styles.documentName, darkMode && styles.documentNameDark]}>{document?.title}</Text>
+          <Text style={[styles.body, darkMode && styles.bodyDark]}>
             The copy kept inside Marden will be removed. You can undo it for a few seconds, and an original imported file stays unchanged.
           </Text>
           <View style={styles.actions}>
@@ -33,7 +34,7 @@ export function DocumentDeleteModal({ document, onClose, onConfirm }: DocumentDe
               onPress={onClose}
               style={({ pressed }) => [styles.cancel, pressed && styles.pressed]}
             >
-              <Text style={styles.cancelText}>Keep file</Text>
+              <Text style={[styles.cancelText, darkMode && styles.cancelTextDark]}>Keep file</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
@@ -67,6 +68,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.paperStrong,
     ...shadow.floating,
   },
+  cardDark: { backgroundColor: darkColors.paperStrong },
   icon: {
     width: 46,
     height: 46,
@@ -76,13 +78,18 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     backgroundColor: '#F5E5E2',
   },
+  iconDark: { backgroundColor: '#402725' },
   eyebrow: { color: colors.error, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 1.1 },
   title: { marginTop: 5, color: colors.ink, fontFamily: fonts.semibold, fontSize: 21, letterSpacing: -0.5 },
+  titleDark: { color: darkColors.ink },
   documentName: { marginTop: 12, color: colors.ink, fontFamily: fonts.medium, fontSize: 13 },
+  documentNameDark: { color: darkColors.ink },
   body: { marginTop: 6, color: colors.inkSoft, fontFamily: fonts.regular, fontSize: 11.5, lineHeight: 18 },
+  bodyDark: { color: darkColors.inkSoft },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 9, marginTop: 23 },
   cancel: { height: 44, justifyContent: 'center', paddingHorizontal: 16 },
   cancelText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 11 },
+  cancelTextDark: { color: darkColors.inkSoft },
   delete: {
     height: 44,
     flexDirection: 'row',

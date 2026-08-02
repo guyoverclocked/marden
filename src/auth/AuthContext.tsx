@@ -2,7 +2,12 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { AppState, Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase, isCloudConfigured, supabaseUrl } from '../supabase';
-import { requestSync, subscribeToSyncState, syncNow as doSyncNow } from '../storage/syncEngine';
+import {
+  cancelPendingSync,
+  requestSync,
+  subscribeToSyncState,
+  syncNow as doSyncNow,
+} from '../storage/syncEngine';
 import { CloudSyncState } from '../types';
 
 type AuthUser = {
@@ -37,6 +42,7 @@ export const useAuth = () => useContext(AuthContext);
 // OAuth is completed in the system browser on native. This URI must be in the
 // Supabase redirect allow-list. It is embedded in the native app at build time.
 const nativeRedirectUri = 'marden://auth';
+const SAFETY_SYNC_INTERVAL_MS = 5 * 60_000;
 
 declare global {
   interface Window {
@@ -88,26 +94,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isCloudConfigured()) { setIsLoading(false); return; }
 
+    let mounted = true;
     const unsubscribeSyncState = subscribeToSyncState(setSyncState);
+    const requestSyncIfSignedIn = () => {
+      if (signedInUserRef.current) requestSync(setSyncState);
+    };
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser(userFromSession(session));
-        signedInUserRef.current = session.user.id;
-        void requestSync(setSyncState);
-      } else {
-        // Fall back to a network-verified user (the storage session may have
-        // been cleared while the user is still signed in).
-        supabase.auth.getUser().then(({ data: { user: authUser } }) => {
-          if (authUser) {
-            setUser(userFromSession({ user: authUser }));
-            signedInUserRef.current = authUser.id;
-            void requestSync(setSyncState);
-          }
-        }).catch(() => {});
+    const restoreSession = async () => {
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+
+        let authUser = session?.user ?? null;
+        if (!authUser) {
+          // A network verification also recovers when the local session cache
+          // is stale. Failure leaves the local library usable while Profile
+          // offers sign-in again.
+          const { data, error: userError } = await supabase.auth.getUser();
+          if (!userError) authUser = data.user;
+        }
+
+        if (!mounted) return;
+        if (authUser) {
+          setUser(userFromSession({ user: authUser }));
+          signedInUserRef.current = authUser.id;
+          void doSyncNow(setSyncState);
+        }
+      } catch {
+        if (mounted) {
+          signedInUserRef.current = null;
+          setUser(null);
+          setSyncState('disconnected');
+        }
+      } finally {
+        if (mounted) setIsLoading(false);
       }
-      setIsLoading(false);
-    });
+    };
+    void restoreSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
@@ -115,7 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Sync immediately on sign-in so the cloud library appears right away.
         if (event === 'SIGNED_IN' && signedInUserRef.current !== session.user.id) {
           signedInUserRef.current = session.user.id;
-          void requestSync(setSyncState);
+          void doSyncNow(setSyncState);
         }
       } else if (event === 'SIGNED_OUT') {
         signedInUserRef.current = null;
@@ -124,23 +147,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    // Re-sync when the app returns to the foreground (native only; the web
-    // equivalent is the debounced requestSync on library changes).
+    const safetySyncTimer = setInterval(requestSyncIfSignedIn, SAFETY_SYNC_INTERVAL_MS);
+
+    // Re-sync whenever the user returns to the app. Desktop/web also retries
+    // immediately after the browser reports that connectivity was restored.
     if (Platform.OS !== 'web') {
       const appStateSub = AppState.addEventListener('change', (state) => {
         if (state === 'active' && hydratedRef.current) {
-          void requestSync(setSyncState);
+          requestSyncIfSignedIn();
         }
       });
       hydratedRef.current = true;
       return () => {
+        mounted = false;
+        clearInterval(safetySyncTimer);
         subscription.unsubscribe();
         appStateSub.remove();
         unsubscribeSyncState();
       };
     }
 
+    const handleVisibility = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') requestSyncIfSignedIn();
+    };
+    window.addEventListener('focus', requestSyncIfSignedIn);
+    window.addEventListener('online', requestSyncIfSignedIn);
+    document.addEventListener('visibilitychange', handleVisibility);
+
     return () => {
+      mounted = false;
+      clearInterval(safetySyncTimer);
+      window.removeEventListener('focus', requestSyncIfSignedIn);
+      window.removeEventListener('online', requestSyncIfSignedIn);
+      document.removeEventListener('visibilitychange', handleVisibility);
       subscription.unsubscribe();
       unsubscribeSyncState();
     };
@@ -196,10 +235,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!sessionData.session) throw new Error('Could not start a session');
     // exchangeCodeForSession saves the session and emits SIGNED_IN, which the
     // listener above uses to set the user and trigger an initial sync.
-    void requestSync(setSyncState);
   }, []);
 
   const signOut = useCallback(async () => {
+    cancelPendingSync();
     await supabase.auth.signOut();
     signedInUserRef.current = null;
     setUser(null);

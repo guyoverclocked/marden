@@ -79,8 +79,22 @@ export const createLibraryBackup = (
   format: BACKUP_FORMAT,
   version: BACKUP_VERSION,
   exportedAt: Date.now(),
-  documents: documents.map((document) => ({ ...document })),
-  projects: projects.map((project) => ({ ...project })),
+  documents: documents.map((document) => ({
+    ...document,
+    cloudId: undefined,
+    cloudUserId: undefined,
+    cloudModifiedAt: undefined,
+    cloudVersion: undefined,
+    syncedDeviceModifiedAt: undefined,
+  })),
+  projects: projects.map((project) => ({
+    ...project,
+    cloudId: undefined,
+    cloudUserId: undefined,
+    cloudModifiedAt: undefined,
+    cloudVersion: undefined,
+    syncedDeviceModifiedAt: undefined,
+  })),
 });
 
 export const parseLibraryBackup = (serializedBackup: string): MardenLibraryBackup => {
@@ -148,10 +162,17 @@ export const mergeLibraryBackup = (
       }
 
       const uniqueProjectId = uniqueId(`restored-${project.id}`, projectIds);
-    const restoredProject = { ...project, id: uniqueProjectId };
-    delete restoredProject.cloudId;
-    delete restoredProject.cloudModifiedAt;
-    projects.push(restoredProject);
+      const restoredProject: Project = {
+        ...project,
+        id: uniqueProjectId,
+        cloudId: undefined,
+        cloudUserId: undefined,
+        cloudModifiedAt: undefined,
+        cloudVersion: undefined,
+        syncedDeviceModifiedAt: undefined,
+        deviceModifiedAt: Date.now(),
+      };
+      projects.push(restoredProject);
       projectsById.set(restoredProject.id, restoredProject);
       projectIdMap.set(project.id, restoredProject.id);
       restoredProjectCount += 1;
@@ -164,9 +185,16 @@ export const mergeLibraryBackup = (
       continue;
     }
 
-    const restoredProject = { ...project, id: uniqueId(project.id, projectIds) };
-    delete restoredProject.cloudId;
-    delete restoredProject.cloudModifiedAt;
+    const restoredProject: Project = {
+      ...project,
+      id: uniqueId(project.id, projectIds),
+      cloudId: undefined,
+      cloudUserId: undefined,
+      cloudModifiedAt: undefined,
+      cloudVersion: undefined,
+      syncedDeviceModifiedAt: undefined,
+      deviceModifiedAt: Date.now(),
+    };
     projects.push(restoredProject);
     projectsById.set(restoredProject.id, restoredProject);
     projectsByName.set(restoredProject.name.trim().toLocaleLowerCase(), restoredProject);
@@ -202,7 +230,10 @@ export const mergeLibraryBackup = (
       // records must be treated as local changes and receive fresh IDs in the
       // current account, otherwise RLS rejects them or mixes accounts.
       cloudId: undefined,
+      cloudUserId: undefined,
       cloudModifiedAt: undefined,
+      cloudVersion: undefined,
+      syncedDeviceModifiedAt: undefined,
       deviceModifiedAt: Date.now(),
       deletedAt: undefined,
     };

@@ -2,6 +2,7 @@ import { Platform, Linking } from 'react-native';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { File, Paths } from 'expo-file-system';
 import * as LegacyFileSystem from 'expo-file-system/legacy';
+import { compareVersions } from './version';
 
 type LegacyFileSystem = {
   cacheDirectory: string | null;
@@ -36,12 +37,14 @@ export async function checkForUpdate(
     const lastCheck = await storage.getItem(LAST_CHECK_KEY);
     if (lastCheck && Date.now() - Number(lastCheck) < CHECK_INTERVAL_MS) return null;
 
-    await storage.setItem(LAST_CHECK_KEY, String(Date.now()));
-
     const response = await fetch(GITHUB_API, {
       headers: { Accept: 'application/vnd.github.v3+json' },
     });
     if (!response.ok) return null;
+
+    // Do not suppress update checks for a full day after an offline or failed
+    // request. Only a completed GitHub response advances the throttle.
+    await storage.setItem(LAST_CHECK_KEY, String(Date.now()));
 
     const release = await response.json();
     const latestVersion = (release.tag_name || '').replace(/^v/, '');
@@ -91,13 +94,3 @@ export function openDownloadUrl(url: string): void {
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────
-
-function compareVersions(a: string, b: string): number {
-  const ap = a.split('.').map(Number);
-  const bp = b.split('.').map(Number);
-  for (let i = 0; i < Math.max(ap.length, bp.length); i += 1) {
-    const diff = (ap[i] || 0) - (bp[i] || 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
-}

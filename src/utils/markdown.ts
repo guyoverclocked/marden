@@ -3,15 +3,40 @@ import { Heading, MarkdownDocument } from '../types';
 export const stripExtension = (fileName: string) => fileName.replace(/\.(md|markdown|mdown|mkd)$/i, '');
 
 export const safeDocumentName = (value: string) =>
-  stripExtension(value)
+  stripExtension(value.trim())
     .replace(/[\\/:*?"<>|]/g, '-')
     .replace(/\s+/g, ' ')
     .trim() || 'Untitled';
 
 export const markdownFileName = (value: string) => `${safeDocumentName(value)}.md`;
 
+/** Replace fenced code with spaces while preserving source offsets. */
+const withoutFencedCode = (content: string) => {
+  let fenceCharacter: '`' | '~' | null = null;
+  let minimumFenceLength = 0;
+  return content.split('\n').map((line) => {
+    if (!fenceCharacter) {
+      const opening = line.match(/^ {0,3}(`{3,}|~{3,})/);
+      if (!opening) return line;
+      fenceCharacter = opening[1][0] as '`' | '~';
+      minimumFenceLength = opening[1].length;
+      return ' '.repeat(line.length);
+    }
+
+    const closing = line.match(/^ {0,3}(`{3,}|~{3,})\s*$/);
+    const closesFence = closing
+      && closing[1][0] === fenceCharacter
+      && closing[1].length >= minimumFenceLength;
+    if (closesFence) {
+      fenceCharacter = null;
+      minimumFenceLength = 0;
+    }
+    return ' '.repeat(line.length);
+  }).join('\n');
+};
+
 export const titleFromMarkdown = (content: string, fileName: string) => {
-  const firstHeading = content.match(/^#\s+(.+)$/m)?.[1]?.trim();
+  const firstHeading = withoutFencedCode(content).match(/^#\s+(.+)$/m)?.[1]?.trim();
   return firstHeading || stripExtension(fileName).replace(/[-_]+/g, ' ').trim() || 'Untitled note';
 };
 
@@ -92,7 +117,7 @@ export const setTaskListItemChecked = (content: string, targetIndex: number, che
 };
 
 export const previewFromMarkdown = (content: string) => {
-  const paragraph = content
+  const paragraph = withoutFencedCode(content)
     .split(/\n\s*\n/)
     .map((part) => part.trim())
     .find((part) => part && !part.startsWith('#') && !part.startsWith('```'));
@@ -107,9 +132,10 @@ export const previewFromMarkdown = (content: string) => {
 export const extractHeadings = (content: string): Heading[] => {
   const headings: Heading[] = [];
   const expression = /^(#{1,4})\s+(.+)$/gm;
+  const searchableContent = withoutFencedCode(content);
   let match: RegExpExecArray | null;
 
-  while ((match = expression.exec(content)) !== null) {
+  while ((match = expression.exec(searchableContent)) !== null) {
     headings.push({
       level: match[1].length,
       title: match[2].replace(/[*_`]/g, '').trim(),
@@ -166,6 +192,7 @@ export const getSearchMatches = (content: string, query: string) => {
     }
     globalIdx += line.length + 1;
   }
+  if (insideFence) fenceRanges.push({ start: fenceStart, end: content.length });
 
   const isInsideFence = (pos: number) =>
     fenceRanges.some((r) => pos >= r.start && pos < r.end);

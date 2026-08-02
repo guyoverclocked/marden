@@ -16,13 +16,18 @@ import { DocumentDeleteModal } from './src/components/DocumentDeleteModal';
 import { DocumentRenameModal } from './src/components/DocumentRenameModal';
 import { ProjectAssignmentModal } from './src/components/ProjectAssignmentModal';
 import { UpdateModal } from './src/components/UpdateModal';
-import { AuthProvider } from './src/auth/AuthContext';
 import { EditorScreen } from './src/screens/EditorScreen';
 import { LibraryScreen } from './src/screens/LibraryScreen';
 import { ReaderScreen } from './src/screens/ReaderScreen';
 import { createLibraryBackup, mergeLibraryBackup, parseLibraryBackup } from './src/storage/libraryBackup';
 import { loadLibrary, loadProjects, saveLibrary, saveProjects } from './src/storage/libraryStorage';
-import { requestSync } from './src/storage/syncEngine';
+import { registerSyncLibraryAdapter, requestSync } from './src/storage/syncEngine';
+import {
+  isDocumentDirty,
+  isProjectDirty,
+  reconcileLiveLibrary,
+  SyncLibraryUpdate,
+} from './src/storage/syncMerge';
 import { colors, darkColors } from './src/theme';
 import { MarkdownDocument, Project } from './src/types';
 import { checkForUpdate } from './src/utils/updateChecker';
@@ -154,6 +159,9 @@ export default function App() {
   const [savedDarkMode, setSavedDarkMode] = useState<boolean | null>(null);
   const [availableUpdate, setAvailableUpdate] = useState<UpdateInfo | null>(null);
   const hydratedRef = useRef(false);
+  const documentsRef = useRef<MarkdownDocument[]>([]);
+  const projectsRef = useRef<Project[]>([]);
+  const pendingSyncUpdateRef = useRef<SyncLibraryUpdate | null>(null);
   const pendingExternalMarkdownRef = useRef<PendingExternalMarkdown[]>([]);
   const handledExternalUrisRef = useRef(new Set<string>());
   const pendingDeletionRef = useRef<MarkdownDocument | null>(null);
@@ -174,9 +182,19 @@ export default function App() {
         const queuedExternalDocuments = pendingExternalMarkdownRef.current.splice(0).map(({ name, content }) =>
           createDocument(name, content),
         );
+        const hydratedSnapshot = {
+          documents: [...queuedExternalDocuments, ...savedDocuments],
+          projects: savedProjects,
+        };
+        const initialSnapshot = pendingSyncUpdateRef.current
+          ? reconcileLiveLibrary(pendingSyncUpdateRef.current, hydratedSnapshot)
+          : hydratedSnapshot;
+        pendingSyncUpdateRef.current = null;
+        documentsRef.current = initialSnapshot.documents;
+        projectsRef.current = initialSnapshot.projects;
         hydratedRef.current = true;
-        setDocuments([...queuedExternalDocuments, ...savedDocuments]);
-        setProjects(savedProjects);
+        setDocuments(initialSnapshot.documents);
+        setProjects(initialSnapshot.projects);
         if (queuedExternalDocuments[0]) {
           setActiveDocumentId(queuedExternalDocuments[0].id);
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -194,6 +212,35 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    documentsRef.current = documents;
+  }, [documents]);
+
+  useEffect(() => {
+    projectsRef.current = projects;
+  }, [projects]);
+
+  useEffect(() => registerSyncLibraryAdapter({
+    read: () => hydratedRef.current
+      ? { documents: documentsRef.current, projects: projectsRef.current }
+      : null,
+    apply: (update) => {
+      if (!hydratedRef.current) {
+        pendingSyncUpdateRef.current = update;
+        return update.synced;
+      }
+      const reconciled = reconcileLiveLibrary(update, {
+        documents: documentsRef.current,
+        projects: projectsRef.current,
+      });
+      documentsRef.current = reconciled.documents;
+      projectsRef.current = reconciled.projects;
+      setDocuments(reconciled.documents);
+      setProjects(reconciled.projects);
+      return reconciled;
+    },
+  }), []);
+
+  useEffect(() => {
     if (!hydratedRef.current) return;
     const timer = setTimeout(() => {
       Promise.all([saveLibrary(documents), saveProjects(projects)]).catch(() => {
@@ -203,10 +250,20 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [documents, projects]);
 
+  const pendingSyncRevision = useMemo(() => JSON.stringify({
+    documents: documents
+      .filter(isDocumentDirty)
+      .map((document) => [document.id, document.deviceModifiedAt ?? document.modifiedAt, document.deletedAt]),
+    projects: projects
+      .filter(isProjectDirty)
+      .map((project) => [project.id, project.deviceModifiedAt ?? project.createdAt]),
+  }), [documents, projects]);
+
   useEffect(() => {
     if (!hydratedRef.current) return;
+    if (pendingSyncRevision === '{"documents":[],"projects":[]}') return;
     requestSync();
-  }, [documents, projects]);
+  }, [pendingSyncRevision]);
 
   useEffect(() => {
     const appVersion = require('./app.json').expo.version;
@@ -657,7 +714,6 @@ export default function App() {
   }
 
   return (
-    <AuthProvider>
       <SafeAreaProvider>
         {Platform.OS !== 'web' ? <IncomingMarkdownShare onOpenMarkdown={openExternalMarkdown} /> : null}
         <StatusBar style={darkMode ? 'light' : 'dark'} />
@@ -680,9 +736,12 @@ export default function App() {
             onToggleDarkMode={toggleDarkMode}
             onToggleFavorite={() => toggleFavorite(activeDocument.id)}
             onProgress={(readingProgress) => {
+              const progressChangedAt = Date.now();
               setDocuments((current) =>
                 current.map((document) =>
-                  document.id === activeDocument.id ? { ...document, readingProgress } : document,
+                  document.id === activeDocument.id
+                    ? { ...document, readingProgress, deviceModifiedAt: progressChangedAt }
+                    : document,
                 ),
               );
             }}
@@ -727,6 +786,7 @@ export default function App() {
         )}
         <DocumentActionsModal
           document={actionDocument}
+          darkMode={darkMode}
           onClose={() => setActionDocumentId(null)}
           onEdit={() => {
             if (!actionDocument) return;
@@ -754,6 +814,7 @@ export default function App() {
         />
         <DocumentDeleteModal
           document={documents.find((document) => document.id === deletingDocumentId) || null}
+          darkMode={darkMode}
           onClose={() => setDeletingDocumentId(null)}
           onConfirm={() => {
             const document = documents.find((item) => item.id === deletingDocumentId);
@@ -763,6 +824,7 @@ export default function App() {
         />
         <DocumentRenameModal
           document={documents.find((document) => document.id === renamingDocumentId) || null}
+          darkMode={darkMode}
           onClose={() => setRenamingDocumentId(null)}
           onSave={(name) => {
             if (renamingDocumentId) renameDocument(renamingDocumentId, name);
@@ -770,6 +832,7 @@ export default function App() {
         />
         <ProjectAssignmentModal
           visible={movingDocumentId !== null}
+          darkMode={darkMode}
           documentTitle={documents.find((document) => document.id === movingDocumentId)?.title}
           currentProjectId={documents.find((document) => document.id === movingDocumentId)?.projectId || null}
           projects={projects}
@@ -809,7 +872,6 @@ export default function App() {
           />
         ) : null}
       </SafeAreaProvider>
-    </AuthProvider>
   );
 }
 

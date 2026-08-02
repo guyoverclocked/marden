@@ -650,6 +650,9 @@ function ProjectChip({
 }) {
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Show ${label}`}
+      accessibilityState={{ selected }}
       onPress={onPress}
       style={[
         styles.projectChip,

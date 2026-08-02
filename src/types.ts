@@ -12,10 +12,16 @@ export type MarkdownDocument = {
   projectId: string | null;
   /** Supabase document UUID — null when not yet pushed to cloud. */
   cloudId?: string | null;
-  /** Device‑local timestamp set on every edit; used for LWW conflict resolution. */
+  /** Account that owns cloudId. Prevents stale IDs leaking across sign-ins. */
+  cloudUserId?: string;
+  /** Device-local timestamp set on every edit; compared with the acknowledged value. */
   deviceModifiedAt?: number;
+  /** deviceModifiedAt value acknowledged by the last successful sync. */
+  syncedDeviceModifiedAt?: number;
   /** Server‑side modified_at from the last successful cloud push. */
   cloudModifiedAt?: number;
+  /** Exact server modified_at value, retained without millisecond truncation. */
+  cloudVersion?: string;
   /** Device‑local timestamp when the user deleted this document (soft delete). */
   deletedAt?: number;
 };
@@ -27,10 +33,16 @@ export type Project = {
   createdAt: number;
   /** Supabase project UUID — null when not yet pushed to cloud. */
   cloudId?: string | null;
+  /** Account that owns cloudId. Prevents stale IDs leaking across sign-ins. */
+  cloudUserId?: string;
   /** Device‑local timestamp for conflict resolution. */
   deviceModifiedAt?: number;
+  /** deviceModifiedAt value acknowledged by the last successful sync. */
+  syncedDeviceModifiedAt?: number;
   /** Server‑side modified_at from the last successful cloud push. */
   cloudModifiedAt?: number;
+  /** Exact server modified_at value, retained without millisecond truncation. */
+  cloudVersion?: string;
 };
 
 export type LibraryFilter = 'all' | 'favorites';
@@ -54,6 +66,7 @@ export type CloudSyncState = 'disconnected' | 'synced' | 'pending' | 'error';
 /** Persisted sync metadata (AsyncStorage key: marden.sync.meta.v1). */
 export type SyncMetadata = {
   userId: string;
+  /** Informational only. Correctness does not depend on a device-clock cursor. */
   lastPullAt: number | null;
   lastPushAt: number | null;
 };
