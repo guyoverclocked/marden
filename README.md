@@ -1,10 +1,8 @@
 <p align="center">
-  <img src="assets/icon.png" width="132" alt="Marden app icon" />
+  <a href="https://github.com/guyoverclocked/marden/releases/tag/v2.0.0">
+    <img src="docs/marden-banner.jpg" width="1200" alt="Marden — Keep the answer. Make room to think. A calm home for Markdown." />
+  </a>
 </p>
-
-<h1 align="center">Marden</h1>
-
-<p align="center"><strong>A calm home for Markdown and the ideas worth keeping.</strong></p>
 
 <p align="center">
   Save useful AI answers, research, plans, notes, and Markdown files—then organise them, read them beautifully, and keep them with you across devices.
