@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://github.com/guyoverclocked/marden/releases/tag/v2.0.0">
+  <a href="https://github.com/guyoverclocked/marden/releases/tag/v2.0.1">
     <img src="docs/marden-banner.jpg" width="1200" alt="Marden — Keep the answer. Make room to think. A calm home for Markdown." />
   </a>
 </p>
@@ -9,10 +9,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/guyoverclocked/marden/releases/tag/v2.0.0"><img alt="Marden v2.0.0" src="https://img.shields.io/badge/Release-v2.0.0-315C4A?style=for-the-badge" /></a>
-  <a href="https://github.com/guyoverclocked/marden/releases/download/v2.0.0/Marden-2.0.0.apk"><img alt="Download Android APK" src="https://img.shields.io/badge/Android-APK-315C4A?style=for-the-badge&logo=android&logoColor=white" /></a>
-  <a href="https://github.com/guyoverclocked/marden/releases/download/v2.0.0/Marden-2.0.0-Windows.exe"><img alt="Download for Windows" src="https://img.shields.io/badge/Windows-Universal-315C4A?style=for-the-badge&logo=windows&logoColor=white" /></a>
-  <a href="https://github.com/guyoverclocked/marden/releases/download/v2.0.0/Marden-2.0.0-macOS-arm64.dmg"><img alt="Download for Apple Silicon Mac" src="https://img.shields.io/badge/macOS-Apple_Silicon-315C4A?style=for-the-badge&logo=apple&logoColor=white" /></a>
+  <a href="https://github.com/guyoverclocked/marden/releases/tag/v2.0.1"><img alt="Marden v2.0.1" src="https://img.shields.io/badge/Release-v2.0.1-315C4A?style=for-the-badge" /></a>
+  <a href="https://github.com/guyoverclocked/marden/releases/download/v2.0.1/Marden-2.0.1.apk"><img alt="Download Android APK" src="https://img.shields.io/badge/Android-APK-315C4A?style=for-the-badge&logo=android&logoColor=white" /></a>
+  <a href="https://github.com/guyoverclocked/marden/releases/download/v2.0.1/Marden-2.0.1-Windows.exe"><img alt="Download for Windows" src="https://img.shields.io/badge/Windows-Universal-315C4A?style=for-the-badge&logo=windows&logoColor=white" /></a>
+  <a href="https://github.com/guyoverclocked/marden/releases/download/v2.0.1/Marden-2.0.1-macOS-arm64.dmg"><img alt="Download for Apple Silicon Mac" src="https://img.shields.io/badge/macOS-Apple_Silicon-315C4A?style=for-the-badge&logo=apple&logoColor=white" /></a>
 </p>
 
 <p align="center">
@@ -30,22 +30,22 @@
     <td align="center" width="33%">
       <strong>Android</strong><br />
       Phones and tablets<br /><br />
-      <a href="https://github.com/guyoverclocked/marden/releases/download/v2.0.0/Marden-2.0.0.apk"><strong>Download APK</strong></a>
+      <a href="https://github.com/guyoverclocked/marden/releases/download/v2.0.1/Marden-2.0.1.apk"><strong>Download APK</strong></a>
     </td>
     <td align="center" width="33%">
       <strong>Windows</strong><br />
       x64 and ARM64<br /><br />
-      <a href="https://github.com/guyoverclocked/marden/releases/download/v2.0.0/Marden-2.0.0-Windows.exe"><strong>Download universal installer</strong></a>
+      <a href="https://github.com/guyoverclocked/marden/releases/download/v2.0.1/Marden-2.0.1-Windows.exe"><strong>Download universal installer</strong></a>
     </td>
     <td align="center" width="33%">
       <strong>macOS</strong><br />
       Apple Silicon<br /><br />
-      <a href="https://github.com/guyoverclocked/marden/releases/download/v2.0.0/Marden-2.0.0-macOS-arm64.dmg"><strong>Download DMG</strong></a>
+      <a href="https://github.com/guyoverclocked/marden/releases/download/v2.0.1/Marden-2.0.1-macOS-arm64.dmg"><strong>Download DMG</strong></a>
     </td>
   </tr>
 </table>
 
-Marden 2.0.0 is distributed directly through [GitHub Releases](https://github.com/guyoverclocked/marden/releases/tag/v2.0.0). It is free to use and does not require an account.
+Marden 2.0.1 is distributed directly through [GitHub Releases](https://github.com/guyoverclocked/marden/releases/tag/v2.0.1). It is free to use and does not require an account.
 
 <details>
   <summary><strong>First-time installation</strong></summary>
