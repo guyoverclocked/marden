@@ -2,8 +2,8 @@
   "expo": {
     "name": "Marden",
     "slug": "marden",
-    "version": "2.0.0",
-    "runtimeVersion": "2.0.0",
+    "version": "2.0.1",
+    "runtimeVersion": "2.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -12,7 +12,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.marden.reader",
-      "buildNumber": "8",
+      "buildNumber": "9",
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -58,7 +58,7 @@
     },
     "android": {
       "package": "app.marden.reader",
-      "versionCode": 8,
+      "versionCode": 9,
       "permissions": [
         "REQUEST_INSTALL_PACKAGES"
       ],

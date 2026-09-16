@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { FilePenLine, FolderInput, Pencil, Star, Trash2, X } from 'lucide-react-native';
+import { Download, FilePenLine, FolderInput, Pencil, Star, Trash2, X } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, darkColors, fonts, radii } from '../theme';
@@ -15,6 +15,7 @@ type DocumentActionsModalProps = {
   onMove: () => void;
   onToggleFavorite: () => void;
   onDelete: () => void;
+  onExport?: () => void;
 };
 
 export function DocumentActionsModal({
@@ -26,6 +27,7 @@ export function DocumentActionsModal({
   onMove,
   onToggleFavorite,
   onDelete,
+  onExport,
 }: DocumentActionsModalProps) {
   const theme = darkMode ? darkColors : colors;
   return (
@@ -71,6 +73,15 @@ export function DocumentActionsModal({
             description="Keep important reading close at hand"
             onPress={onToggleFavorite}
           />
+          {onExport ? (
+            <Action
+              darkMode={darkMode}
+              icon={<Download size={19} color={theme.moss} />}
+              title="Export Markdown"
+              description="Save or share this .md file"
+              onPress={onExport}
+            />
+          ) : null}
           <Action
             destructive
             darkMode={darkMode}

@@ -1,23 +1,30 @@
-# Marden 2.0.0 — Your library, on your devices
+# Marden 2.0.1 — Markdown export and bulk library actions
 
-Marden 2 turns useful AI answers and Markdown into a calm, portable reading library across Android, Windows, and Apple-Silicon macOS.
+Marden 2.0.1 makes it easier to take Markdown back out of the app, organise several documents together, and rely on local copies when a device is offline.
 
-## Highlights
+## What’s new
 
-- Automatic, private cross-device sync after sign-in—on launch, local edits, app focus, foregrounding, network recovery, and a periodic safety check
-- Complete account reconciliation so a new device receives the whole library, even after missed or interrupted syncs
-- Bounded network timeouts, retry with backoff and jitter, partial-progress persistence, and honest error states
-- Version-aware conflict handling that preserves both document bodies when offline edits collide
-- Portable library backup export and safe merge restore
-- Direct Markdown file opening, multi-file import, clipboard capture, projects, favourites, search, and reading progress
-- Reader highlights stored as portable `==Markdown highlights==`
-- Code blocks, tables, task lists, document outlines, focus mode, and supported Mermaid diagrams
-- Universal Windows installer for x64 and ARM64, an Apple-Silicon macOS DMG, and an Android APK
+- Export a document as a real `.md` file from the reader toolbar or its library action menu
+- Select multiple library documents—or select all—and move, export, or delete them in one action
+- Undo a bulk deletion before it is committed and synced to other signed-in devices
+- Assign a batch of newly imported Markdown files to a project immediately after import
+- Download exported files in the desktop app and use the native share sheet on Android and iOS
 
-## Install
+## Reliability improvements
 
-- **Android:** download `Marden-2.0.0.apk`, open it, and approve installation from the browser or file manager if Android asks.
-- **Windows:** download `Marden-2.0.0-Windows.exe` and complete the setup wizard.
-- **Apple-Silicon macOS:** download `Marden-2.0.0-macOS-arm64.dmg`, drag Marden to Applications, then right-click and choose **Open** on first launch if macOS displays an unnotarized-app warning.
+- Repair missing native document files after the library loads or receives synced changes
+- Keep a document visible when its expected local file is missing or unreadable, using an available fallback copy when possible
+- Reduce unnecessary document-card rerenders during library interactions
 
-An account is optional. Without sign-in, Marden remains a fully usable on-device Markdown library.
+## Download and install
+
+- **Android:** download `Marden-2.0.1.apk`, open it, and approve installation from the browser or file manager if Android asks.
+- **Windows:** download `Marden-2.0.1-Windows.exe` for the universal x64/ARM64 installer. Architecture-specific installers are also attached.
+- **Apple-Silicon macOS:** download `Marden-2.0.1-macOS-arm64.dmg`, drag Marden to Applications, then right-click and choose **Open** on first launch if macOS displays an unnotarized-app warning.
+- **Integrity:** compare a download against `Marden-2.0.1-SHA256SUMS.txt` if you want to verify it.
+
+### Android 2.0.0 users: one-time reinstall required
+
+The Android signing certificate changed for 2.0.1, so Android cannot install this APK over 2.0.0. Before uninstalling 2.0.0, export a library backup (especially if you do not use sync). Then uninstall 2.0.0 and install 2.0.1. Uninstalling clears Marden’s local app data.
+
+Marden remains local-first. An account is optional, and cloud sync is only used after sign-in.

@@ -20,8 +20,9 @@ import { EditorScreen } from './src/screens/EditorScreen';
 import { LibraryScreen } from './src/screens/LibraryScreen';
 import { ReaderScreen } from './src/screens/ReaderScreen';
 import { createLibraryBackup, mergeLibraryBackup, parseLibraryBackup } from './src/storage/libraryBackup';
-import { loadLibrary, loadProjects, saveLibrary, saveProjects } from './src/storage/libraryStorage';
+import { ensureOfflineCopies, loadLibrary, loadProjects, saveLibrary, saveProjects } from './src/storage/libraryStorage';
 import { registerSyncLibraryAdapter, requestSync } from './src/storage/syncEngine';
+import { exportMultipleMarkdowns, exportSingleMarkdown } from './src/storage/markdownExport';
 import {
   isDocumentDirty,
   isProjectDirty,
@@ -158,6 +159,15 @@ export default function App() {
   const [pendingDeletion, setPendingDeletion] = useState<MarkdownDocument | null>(null);
   const [savedDarkMode, setSavedDarkMode] = useState<boolean | null>(null);
   const [availableUpdate, setAvailableUpdate] = useState<UpdateInfo | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkMoveOpen, setBulkMoveOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [pendingBulkIds, setPendingBulkIds] = useState<string[] | null>(null);
+  // bulk-delete undo state (must be before libraryDocuments which reads bulkPendingIds)
+  const [bulkPending, setBulkPending] = useState<MarkdownDocument[] | null>(null);
+  const bulkPendingRef = useRef<MarkdownDocument[] | null>(null);
+  const bulkPendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [bulkPendingIds, setBulkPendingIds] = useState<Set<string> | null>(null);
   const hydratedRef = useRef(false);
   const documentsRef = useRef<MarkdownDocument[]>([]);
   const projectsRef = useRef<Project[]>([]);
@@ -240,6 +250,22 @@ export default function App() {
     },
   }), []);
 
+  // Guarantee a local .md file exists for every library document (offline access).
+  // Runs after hydration and after any sync-reconciled update. Debounced so
+  // bulk imports don't trigger many sequential file writes.
+  const ensureOfflineTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    if (ensureOfflineTimer.current) clearTimeout(ensureOfflineTimer.current);
+    ensureOfflineTimer.current = setTimeout(() => {
+      ensureOfflineTimer.current = null;
+      void ensureOfflineCopies(documents);
+    }, 450);
+    return () => {
+      if (ensureOfflineTimer.current) clearTimeout(ensureOfflineTimer.current);
+    };
+  }, [documents]);
+
   useEffect(() => {
     if (!hydratedRef.current) return;
     const timer = setTimeout(() => {
@@ -278,8 +304,16 @@ export default function App() {
   );
 
   const libraryDocuments = useMemo(
-    () => documents.filter((document) => !document.deletedAt && document.id !== pendingDeletion?.id),
-    [documents, pendingDeletion],
+    () => {
+      const bulkIds = bulkPendingIds;
+      return documents.filter((document) => {
+        if (document.deletedAt) return false;
+        if (pendingDeletion?.id === document.id) return false;
+        if (bulkIds?.has(document.id)) return false;
+        return true;
+      });
+    },
+    [documents, pendingDeletion, bulkPendingIds],
   );
 
   const commitPendingDeletion = (documentId?: string) => {
@@ -464,7 +498,22 @@ export default function App() {
       if (imported.length === 1) {
         setActiveDocumentId(imported[0].id);
       } else {
-        Alert.alert('Files imported', `${imported.length} Markdown files are now in your library.`);
+        const ids = imported.map((d) => d.id);
+        Alert.alert(
+          'Files imported',
+          `${imported.length} Markdown files are now in your library. Assign them to a project?`,
+          [
+            { text: 'Keep unfiled', style: 'cancel' },
+            {
+              text: 'Choose project',
+              onPress: () => {
+                setPendingBulkIds(ids);
+                setSelectedIds(new Set(ids));
+                setBulkMoveOpen(true);
+              },
+            },
+          ],
+        );
       }
 
       if (skipped > 0) {
@@ -703,6 +752,114 @@ export default function App() {
     setActionDocumentId(document.id);
   };
 
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+  const selectAllVisible = useCallback((ids: string[]) => setSelectedIds(new Set(ids)), []);
+
+  const selectedDocuments = useMemo(
+    () => documents.filter((d) => selectedIds.has(d.id) && !d.deletedAt),
+    [documents, selectedIds],
+  );
+
+  const bulkAssignProject = useCallback((projectId: string | null) => {
+    const now = Date.now();
+    const target = pendingBulkIds ?? [...selectedIds];
+    if (target.length === 0) return;
+    setDocuments((cur) =>
+      cur.map((d) => (target.includes(d.id) ? { ...d, projectId, modifiedAt: now, deviceModifiedAt: now } : d)),
+    );
+    setPendingBulkIds(null);
+    clearSelection();
+    setBulkMoveOpen(false);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [pendingBulkIds, selectedIds, clearSelection]);
+
+  const exportSingle = useCallback(async (doc: MarkdownDocument) => {
+    try {
+      await exportSingleMarkdown(doc);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      Alert.alert('Export failed', e instanceof Error ? e.message : 'Could not export file.');
+    }
+  }, []);
+
+  const exportSelected = useCallback(async () => {
+    if (selectedDocuments.length === 0) return;
+    setIsExporting(true);
+    try {
+      await exportMultipleMarkdowns(selectedDocuments);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Exported', `${selectedDocuments.length} file${selectedDocuments.length === 1 ? '' : 's'} exported.`);
+    } catch (e) {
+      Alert.alert('Export failed', e instanceof Error ? e.message : 'Could not export files.');
+    } finally {
+      setIsExporting(false);
+    }
+  }, [selectedDocuments]);
+
+  const commitBulkPending = useCallback(() => {
+    const docs = bulkPendingRef.current;
+    if (!docs?.length) return;
+    if (bulkPendingTimerRef.current) clearTimeout(bulkPendingTimerRef.current);
+    bulkPendingTimerRef.current = null;
+    bulkPendingRef.current = null;
+    setBulkPending(null);
+    setBulkPendingIds(null);
+    const ids = new Set(docs.map((d) => d.id));
+    const now = Date.now();
+    setDocuments((cur) => cur.map((d) => (ids.has(d.id) ? { ...d, deletedAt: now, modifiedAt: now, deviceModifiedAt: now } : d)));
+    setSelectedIds(new Set());
+  }, []);
+
+  const undoBulkPending = useCallback(() => {
+    if (!bulkPendingRef.current) return;
+    if (bulkPendingTimerRef.current) clearTimeout(bulkPendingTimerRef.current);
+    bulkPendingTimerRef.current = null;
+    bulkPendingRef.current = null;
+    setBulkPending(null);
+    setBulkPendingIds(null);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, []);
+
+  const beginBulkDelete = useCallback(() => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    const target = documents.filter((d) => ids.includes(d.id) && !d.deletedAt);
+    if (target.length === 0) return;
+    commitBulkPending();
+    // If a single-delete undo is pending, commit it — we don't support two undos at once
+    commitPendingDeletion();
+    bulkPendingRef.current = target;
+    setBulkPending(target);
+    setBulkPendingIds(new Set(ids));
+    bulkPendingTimerRef.current = setTimeout(commitBulkPending, DELETE_UNDO_DURATION);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  }, [documents, selectedIds, commitBulkPending]);
+
+  const bulkDelete = useCallback(() => {
+    const count = selectedIds.size;
+    if (count === 0) return;
+    Alert.alert(
+      'Delete selected?',
+      `${count} file${count === 1 ? '' : 's'} will be removed from Marden (originals untouched). You can undo for a few seconds and the deletion syncs to your other devices.\n\nContinue?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: beginBulkDelete },
+      ],
+    );
+  }, [pendingBulkIds, selectedIds, beginBulkDelete]);
+
+  useEffect(() => () => {
+    if (bulkPendingTimerRef.current) clearTimeout(bulkPendingTimerRef.current);
+  }, []);
+
   const actionDocument = documents.find((document) => document.id === actionDocumentId) || null;
 
   if (!fontsLoaded) {
@@ -759,6 +916,7 @@ export default function App() {
                 }),
               );
             }}
+            onExport={() => void exportSingle(activeDocument)}
           />
         ) : (
           <LibraryScreen
@@ -770,6 +928,9 @@ export default function App() {
             isPasting={isPasting}
             isBackingUp={isBackingUp}
             isRestoring={isRestoring}
+            isExporting={isExporting}
+            selectedIds={selectedIds}
+            isSelectionMode={selectedIds.size > 0 || bulkMoveOpen}
             onImport={importDocuments}
             onPasteFromClipboard={pasteFromClipboard}
             onExportBackup={exportBackup}
@@ -782,6 +943,18 @@ export default function App() {
             onCreateProject={createProject}
             onOpen={openDocument}
             onDocumentMenu={showDocumentMenu}
+            onToggleSelect={toggleSelect}
+            onEnterSelectionMode={(id) => setSelectedIds(new Set([id]))}
+            onExitSelectionMode={() => { setSelectedIds(new Set()); setPendingBulkIds(null); setBulkMoveOpen(false); }}
+            onSelectAllVisible={() => {
+              const visible = libraryDocuments.map((d) => d.id);
+              const allSelected = visible.length > 0 && visible.every((id) => selectedIds.has(id));
+              if (allSelected) setSelectedIds(new Set());
+              else setSelectedIds(new Set(visible));
+            }}
+            onBulkMove={() => setBulkMoveOpen(true)}
+            onBulkExport={exportSelected}
+            onBulkDelete={bulkDelete}
           />
         )}
         <DocumentActionsModal
@@ -810,6 +983,12 @@ export default function App() {
           onDelete={() => {
             setDeletingDocumentId(actionDocument?.id || null);
             setActionDocumentId(null);
+          }}
+          onExport={() => {
+            if (!actionDocument) return;
+            const doc = actionDocument;
+            setActionDocumentId(null);
+            void exportSingle(doc);
           }}
         />
         <DocumentDeleteModal
@@ -849,7 +1028,30 @@ export default function App() {
             void Haptics.selectionAsync();
           }}
         />
-        {pendingDeletion ? (
+        <ProjectAssignmentModal
+          visible={bulkMoveOpen}
+          darkMode={darkMode}
+          documentTitle={pendingBulkIds ? `${pendingBulkIds.length} files` : `${selectedIds.size} selected`}
+          currentProjectId={null}
+          projects={projects}
+          onClose={() => { setBulkMoveOpen(false); if (pendingBulkIds) { setPendingBulkIds(null); setSelectedIds(new Set()); } }}
+          onSelect={bulkAssignProject}
+        />
+        {bulkPending ? (
+          <View style={[styles.undoSnackbar, darkMode && styles.undoSnackbarDark]}>
+            <Text numberOfLines={1} style={[styles.undoText, darkMode && styles.undoTextDark]}>
+              {bulkPending.length} file{bulkPending.length === 1 ? '' : 's'} removed
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Undo bulk deletion"
+              onPress={undoBulkPending}
+              style={({ pressed }) => [styles.undoButton, pressed && styles.undoButtonPressed]}
+            >
+              <Text style={styles.undoButtonText}>Undo</Text>
+            </Pressable>
+          </View>
+        ) : pendingDeletion ? (
           <View style={[styles.undoSnackbar, darkMode && styles.undoSnackbarDark]}>
             <Text numberOfLines={1} style={[styles.undoText, darkMode && styles.undoTextDark]}>
               {pendingDeletion.title} removed

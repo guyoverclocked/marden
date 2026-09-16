@@ -22,6 +22,7 @@ import {
   ArrowUp,
   ChevronLeft,
   Copy,
+  Download,
   Highlighter,
   ListTree,
   Maximize2,
@@ -55,6 +56,7 @@ type ReaderScreenProps = {
   onToggleFavorite: () => void;
   onProgress: (progress: number) => void;
   onDocumentContentChange: (content: string) => void;
+  onExport?: () => void;
 };
 
 const scales: TextScale[] = ['compact', 'comfortable', 'large'];
@@ -68,6 +70,7 @@ export function ReaderScreen({
   onToggleFavorite,
   onProgress,
   onDocumentContentChange,
+  onExport,
 }: ReaderScreenProps) {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
@@ -512,6 +515,14 @@ export function ReaderScreen({
           <ReaderTool label={copied ? 'Copied' : 'Copy'} darkMode={darkMode} onPress={() => void copyDocumentText()}>
             <Copy size={18} color={copied ? (darkMode ? '#D7E9A2' : colors.moss) : darkMode ? '#BAC4BD' : colors.inkSoft} />
           </ReaderTool>
+          {onExport ? (
+            <>
+              <View style={styles.toolbarDivider} />
+              <ReaderTool label="Export" darkMode={darkMode} onPress={onExport}>
+                <Download size={18} color={darkMode ? '#BAC4BD' : colors.inkSoft} />
+              </ReaderTool>
+            </>
+          ) : null}
           <View style={styles.toolbarDivider} />
           <ReaderTool label="Focus" darkMode={darkMode} onPress={toggleFocus}>
             <Maximize2 size={19} color={darkMode ? '#BAC4BD' : colors.inkSoft} />

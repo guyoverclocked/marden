@@ -47,13 +47,51 @@ const hydrateNativeDocument = async (stored: StoredDocument): Promise<MarkdownDo
     persistDocumentContent(stored.id, content, contentFileName);
   } else {
     const file = new File(ensureDocumentsDirectory(), contentFileName);
-    if (!file.exists) return null;
-    content = await file.text();
-    persistedContent.set(stored.id, content);
+    if (file.exists) {
+      try {
+        content = await file.text();
+        persistedContent.set(stored.id, content);
+      } catch {
+        // File unreadable — try id-based fallback, then empty placeholder
+        const fallback = new File(ensureDocumentsDirectory(), fileNameForDocument(stored.id));
+        if (fallback.exists && fallback.name !== contentFileName) {
+          try {
+            content = await fallback.text();
+            persistedContent.set(stored.id, content);
+          } catch {
+            content = '';
+          }
+        } else {
+          content = '';
+        }
+      }
+    } else {
+      // Missing on-disk copy — keep document visible with empty body so it
+      // is not silently dropped; sync or a later save will repair the file.
+      const fallback = new File(ensureDocumentsDirectory(), fileNameForDocument(stored.id));
+      if (fallback.exists) {
+        try {
+          content = await fallback.text();
+          persistedContent.set(stored.id, content);
+        } catch {
+          content = '';
+        }
+      } else {
+        content = stored.content ?? '';
+        if (content) {
+          // Repair missing file from inline content if any
+          try { persistDocumentContent(stored.id, content, contentFileName); } catch {}
+        } else {
+          content = '';
+          console.warn(`[storage] missing file for ${stored.id} (${contentFileName}); showing empty placeholder`);
+        }
+      }
+    }
+    if (typeof content !== 'string') content = '';
   }
 
   const { contentFileName: _contentFileName, ...metadata } = stored;
-  return { ...metadata, content, projectId: stored.projectId ?? null };
+  return { ...metadata, content: content as string, projectId: stored.projectId ?? null };
 };
 
 export const loadLibrary = async (): Promise<MarkdownDocument[]> => {
@@ -115,4 +153,26 @@ export const loadProjects = async (): Promise<Project[]> => {
 
 export const saveProjects = async (projects: Project[]) => {
   await Storage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+};
+
+/**
+ * Best-effort repair: ensures every non-deleted document has a local file copy.
+ * Called after hydration/sync so offline reading never fails for lack of a file.
+ * Returns count of files (re)written.
+ */
+export const ensureOfflineCopies = async (documents: MarkdownDocument[]): Promise<number> => {
+  if (Platform.OS === 'web') return 0;
+  let repaired = 0;
+  for (const doc of documents) {
+    if (doc.deletedAt) continue;
+    const expected = (doc as StoredDocument).contentFileName || fileNameForDocument(doc.id);
+    const primary = new File(ensureDocumentsDirectory(), expected);
+    const fallback = new File(ensureDocumentsDirectory(), fileNameForDocument(doc.id));
+    if (primary.exists || fallback.exists) continue;
+    try {
+      persistDocumentContent(doc.id, doc.content, expected);
+      repaired += 1;
+    } catch {}
+  }
+  return repaired;
 };

@@ -42,6 +42,11 @@ yarn-error.*
 /ios
 /android
 
+# release keystore — keep credentials/marden-release.keystore + android/app/marden-release.keystore local + backed up, never committed
+credentials/*.keystore
+credentials/*.jks
+android/app/marden-release.keystore
+
 # local build outputs
 /artifacts/
 

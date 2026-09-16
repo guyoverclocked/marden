@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://github.com/guyoverclocked/marden/releases/tag/v2.0.1">
+  <a href="https://github.com/guyoverclocked/marden/releases">
     <img src="docs/marden-banner.jpg" width="1200" alt="Marden — Keep the answer. Make room to think. A calm home for Markdown." />
   </a>
 </p>
@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/guyoverclocked/marden/releases/tag/v2.0.1"><img alt="Marden v2.0.1" src="https://img.shields.io/badge/Release-v2.0.1-315C4A?style=for-the-badge" /></a>
+  <a href="https://github.com/guyoverclocked/marden/releases"><img alt="Marden v2.0.1" src="https://img.shields.io/badge/Release-v2.0.1-315C4A?style=for-the-badge" /></a>
   <a href="https://github.com/guyoverclocked/marden/releases/download/v2.0.1/Marden-2.0.1.apk"><img alt="Download Android APK" src="https://img.shields.io/badge/Android-APK-315C4A?style=for-the-badge&logo=android&logoColor=white" /></a>
   <a href="https://github.com/guyoverclocked/marden/releases/download/v2.0.1/Marden-2.0.1-Windows.exe"><img alt="Download for Windows" src="https://img.shields.io/badge/Windows-Universal-315C4A?style=for-the-badge&logo=windows&logoColor=white" /></a>
   <a href="https://github.com/guyoverclocked/marden/releases/download/v2.0.1/Marden-2.0.1-macOS-arm64.dmg"><img alt="Download for Apple Silicon Mac" src="https://img.shields.io/badge/macOS-Apple_Silicon-315C4A?style=for-the-badge&logo=apple&logoColor=white" /></a>
@@ -17,6 +17,7 @@
 
 <p align="center">
   <a href="#download-marden">Download</a> ·
+  <a href="#whats-new-in-201">What’s new</a> ·
   <a href="#see-marden-in-action">Screenshots</a> ·
   <a href="#made-for-things-worth-returning-to">Why Marden</a> ·
   <a href="#everything-in-its-place">Features</a> ·
@@ -45,12 +46,12 @@
   </tr>
 </table>
 
-Marden 2.0.1 is distributed directly through [GitHub Releases](https://github.com/guyoverclocked/marden/releases/tag/v2.0.1). It is free to use and does not require an account.
+Marden 2.0.1 is distributed directly through [GitHub Releases](https://github.com/guyoverclocked/marden/releases). It is free to use and does not require an account.
 
 <details>
   <summary><strong>First-time installation</strong></summary>
   <br />
-  <strong>Android:</strong> open the downloaded APK and allow installation from your browser or file manager if Android asks.<br /><br />
+  <strong>Android:</strong> open the downloaded APK and allow installation from your browser or file manager if Android asks. If you installed Marden 2.0.0, export a library backup, uninstall that version, and then install 2.0.1. This one-time step is required because the Android signing certificate changed; uninstalling clears local app data.<br /><br />
   <strong>Windows:</strong> open the universal installer and follow the setup wizard. Windows may show a SmartScreen notice for this independently distributed build; choose <em>More info</em>, then <em>Run anyway</em> if you trust the download.<br /><br />
   <strong>macOS:</strong> open the DMG and drag Marden to Applications. This build is not notarized, so on first launch right-click Marden, choose <em>Open</em>, and confirm.
 </details>
@@ -94,20 +95,16 @@ Paste a response from your favourite AI app, import an existing Markdown file, o
 | **Stay in control** | Use Marden without an account, export a portable library backup, and restore it without replacing existing documents. |
 | **Protect every edit** | Interrupted syncs retry automatically, incomplete transfers never claim success, and simultaneous offline edits are preserved as conflict copies. |
 
-## What is new in 2.0.0
+## What’s new in 2.0.1
 
 <table>
   <tr>
-    <td width="50%"><strong>Automatic cross-device sync</strong><br />Private, account-scoped sync that runs when it is needed and safely resumes after unreliable connections.</td>
-    <td width="50%"><strong>Portable backups</strong><br />Export the complete library and merge it back later without overwriting what is already there.</td>
+    <td width="50%"><strong>Export real Markdown files</strong><br />Export one document from its reader or action menu. Marden downloads the <code>.md</code> file on desktop and opens the native share sheet on mobile.</td>
+    <td width="50%"><strong>Work with several documents at once</strong><br />Select multiple library items, select all, then move, export, or delete them together. Bulk deletion includes confirmation and a short undo window.</td>
   </tr>
   <tr>
-    <td width="50%"><strong>More ways in</strong><br />Open and share Markdown into Marden, import multiple files, or capture clipboard content in one step.</td>
-    <td width="50%"><strong>Desktop-ready</strong><br />Dedicated Apple-Silicon macOS and universal x64/ARM64 Windows builds.</td>
-  </tr>
-  <tr>
-    <td width="50%"><strong>Reader highlights</strong><br />Save selected text as portable <code>==Markdown highlights==</code> that travel with the document.</td>
-    <td width="50%"><strong>Safer offline work</strong><br />Version-aware merging keeps both document bodies when devices edit the same file offline.</td>
+    <td width="50%"><strong>File imports land where they belong</strong><br />After importing several Markdown files, assign the whole batch to a project immediately or keep it Unfiled.</td>
+    <td width="50%"><strong>More resilient offline copies</strong><br />Marden repairs missing local document files after loading or syncing and keeps affected library entries visible instead of silently dropping them.</td>
   </tr>
 </table>
 

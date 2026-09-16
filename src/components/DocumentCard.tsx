@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Clock3, Folder, MoreHorizontal, Star } from 'lucide-react-native';
+import { Check, Clock3, Folder, MoreHorizontal, Star } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { MarkdownDocument } from '../types';
@@ -12,8 +12,12 @@ type DocumentCardProps = {
   projectName?: string;
   darkMode?: boolean;
   desktop?: boolean;
+  selectable?: boolean;
+  selected?: boolean;
   onPress: () => void;
   onMenu: () => void;
+  onLongPress?: () => void;
+  onToggleSelect?: () => void;
 };
 
 const coverPalettes: [string, string][] = [
@@ -28,18 +32,25 @@ const paletteFor = (id: string) => {
   return coverPalettes[index];
 };
 
-export function DocumentCard({ document, projectName, darkMode = false, desktop = false, onPress, onMenu }: DocumentCardProps) {
+function DocumentCardImpl({ document, projectName, darkMode = false, desktop = false, selectable = false, selected = false, onPress, onMenu, onLongPress, onToggleSelect }: DocumentCardProps) {
   const progress = Math.round(document.readingProgress * 100);
   const theme = darkMode ? darkColors : colors;
 
   return (
-    <View style={[styles.card, darkMode && styles.cardDark, desktop && styles.cardDesktop]}>
+    <View style={[styles.card, darkMode && styles.cardDark, desktop && styles.cardDesktop, selectable && selected && styles.cardSelected, darkMode && selectable && selected && styles.cardSelectedDark]}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Open ${document.title}`}
-        onPress={onPress}
+        accessibilityLabel={`${selectable ? (selected ? 'Deselect' : 'Select') : 'Open'} ${document.title}`}
+        onPress={() => (selectable && onToggleSelect ? onToggleSelect() : onPress())}
+        onLongPress={onLongPress}
+        delayLongPress={380}
         style={({ pressed }) => [styles.mainPressable, pressed && styles.cardPressed]}
       >
+        {selectable ? (
+          <View style={[styles.selectMark, selected && styles.selectMarkActive, darkMode && styles.selectMarkDark, darkMode && selected && styles.selectMarkActiveDark]}>
+            {selected ? <Check size={13} color={colors.paper} /> : null}
+          </View>
+        ) : null}
         <LinearGradient colors={paletteFor(document.id)} style={styles.cover}>
           <View style={styles.coverTopRow}>
             <Text style={styles.mdLabel}>MD</Text>
@@ -82,15 +93,17 @@ export function DocumentCard({ document, projectName, darkMode = false, desktop 
           </View>
         </View>
       </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`More actions for ${document.title}`}
-        hitSlop={8}
-        onPress={onMenu}
-        style={({ pressed }) => [styles.menuButton, pressed && styles.iconPressed]}
-      >
-        <MoreHorizontal size={20} color={theme.inkSoft} />
-      </Pressable>
+      {!selectable ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`More actions for ${document.title}`}
+          hitSlop={8}
+          onPress={onMenu}
+          style={({ pressed }) => [styles.menuButton, pressed && styles.iconPressed]}
+        >
+          <MoreHorizontal size={20} color={theme.inkSoft} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -224,6 +237,40 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semibold,
     fontSize: 11,
   },
+  cardSelected: {
+    borderColor: colors.moss,
+    backgroundColor: '#EDF2ED',
+  },
+  cardSelectedDark: {
+    borderColor: '#688373',
+    backgroundColor: '#253029',
+  },
+  selectMark: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderWidth: 1.5,
+    borderColor: colors.lineStrong,
+    zIndex: 2,
+  },
+  selectMarkActive: {
+    backgroundColor: colors.moss,
+    borderColor: colors.moss,
+  },
+  selectMarkDark: {
+    backgroundColor: 'rgba(32,38,34,0.92)',
+    borderColor: darkColors.lineStrong,
+  },
+  selectMarkActiveDark: {
+    backgroundColor: colors.moss,
+    borderColor: colors.moss,
+  },
   cardDark: {
     backgroundColor: darkColors.paperStrong,
     borderColor: darkColors.line,
@@ -253,3 +300,5 @@ const styles = StyleSheet.create({
     color: darkColors.moss,
   },
 });
+
+export const DocumentCard = React.memo(DocumentCardImpl);

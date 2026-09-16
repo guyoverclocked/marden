@@ -14,11 +14,13 @@ import {
 import {
   ArchiveRestore,
   Check,
+  CheckSquare,
   ClipboardPaste,
   Cloud,
   Download,
   FilePlus2,
   FileUp,
+  FolderInput,
   FolderOpen,
   FolderPlus,
   PencilLine,
@@ -26,6 +28,7 @@ import {
   Search,
   Sparkles,
   Star,
+  Trash2,
   Upload,
   User,
   X,
@@ -59,6 +62,17 @@ type LibraryScreenProps = {
   onCreateProject: (name: string, color: string) => Project;
   onOpen: (document: MarkdownDocument) => void;
   onDocumentMenu: (document: MarkdownDocument) => void;
+  // Bulk selection
+  selectedIds?: Set<string>;
+  isSelectionMode?: boolean;
+  onToggleSelect?: (id: string) => void;
+  onEnterSelectionMode?: (id: string) => void;
+  onExitSelectionMode?: () => void;
+  onSelectAllVisible?: () => void;
+  onBulkMove?: () => void;
+  onBulkExport?: () => void;
+  onBulkDelete?: () => void;
+  isExporting?: boolean;
 };
 
 export function LibraryScreen({
@@ -78,6 +92,16 @@ export function LibraryScreen({
   onCreateProject,
   onOpen,
   onDocumentMenu,
+  selectedIds,
+  isSelectionMode,
+  onToggleSelect,
+  onEnterSelectionMode,
+  onExitSelectionMode,
+  onSelectAllVisible,
+  onBulkMove,
+  onBulkExport,
+  onBulkDelete,
+  isExporting,
 }: LibraryScreenProps) {
   const { width: windowWidth } = useWindowDimensions();
   const desktop = windowWidth >= 900;
@@ -306,51 +330,58 @@ export function LibraryScreen({
         </ScrollView>
 
         <View style={styles.sectionHeader}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={[styles.eyebrow, darkMode && styles.accentTextDark]}>
-              {query ? `${visibleDocuments.length} ${visibleDocuments.length === 1 ? 'MATCH' : 'MATCHES'}` : 'YOUR LIBRARY'}
+              {isSelectionMode ? `${selectedIds?.size ?? 0} SELECTED` : query ? `${visibleDocuments.length} ${visibleDocuments.length === 1 ? 'MATCH' : 'MATCHES'}` : 'YOUR LIBRARY'}
             </Text>
             <Text style={[styles.sectionTitle, darkMode && styles.textStrongDark]}>
-              {query ? 'Search results' : activeProjectName}
+              {isSelectionMode ? 'Select documents' : query ? 'Search results' : activeProjectName}
             </Text>
           </View>
           <View style={styles.filters}>
-            <Pressable
-              onPress={() => setFilter('all')}
-              style={[
-                styles.filterButton,
-                darkMode && styles.surfaceDark,
-                filter === 'all' && styles.filterButtonActive,
-                darkMode && filter === 'all' && styles.filterButtonActiveDark,
-              ]}
-            >
-              <FolderOpen size={14} color={filter === 'all' ? colors.paper : theme.inkSoft} />
-              <Text
-                style={[
-                  styles.filterText,
-                  darkMode && styles.textSoftDark,
-                  filter === 'all' && styles.filterTextActive,
-                ]}
-              >
-                All
-              </Text>
-            </Pressable>
-            <Pressable
-              accessibilityLabel="Show favorites"
-              onPress={() => setFilter('favorites')}
-              style={[
-                styles.starFilter,
-                darkMode && styles.surfaceDark,
-                filter === 'favorites' && styles.starFilterActive,
-                darkMode && filter === 'favorites' && styles.starFilterActiveDark,
-              ]}
-            >
-              <Star
-                size={16}
-                color={filter === 'favorites' ? colors.mossDark : theme.inkSoft}
-                fill={filter === 'favorites' ? colors.lime : 'transparent'}
-              />
-            </Pressable>
+            {isSelectionMode ? (
+              <>
+                <Pressable onPress={onSelectAllVisible} style={[styles.filterButton, darkMode && styles.surfaceDark]}>
+                  <CheckSquare size={14} color={theme.inkSoft} />
+                  <Text style={[styles.filterText, darkMode && styles.textSoftDark]}>All</Text>
+                </Pressable>
+                <Pressable onPress={onExitSelectionMode} style={[styles.starFilter, darkMode && styles.surfaceDark]}>
+                  <X size={14} color={theme.inkSoft} />
+                </Pressable>
+              </>
+            ) : (
+              <>
+                {visibleDocuments.length > 1 ? (
+                  <Pressable
+                    accessibilityLabel="Select multiple"
+                    onPress={() => onEnterSelectionMode?.(visibleDocuments[0]?.id ?? '')}
+                    style={[styles.filterButton, darkMode && styles.surfaceDark]}
+                  >
+                    <CheckSquare size={14} color={theme.inkSoft} />
+                    <Text style={[styles.filterText, darkMode && styles.textSoftDark]}>Select</Text>
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  onPress={() => setFilter('all')}
+                  style={[
+                    styles.filterButton,
+                    darkMode && styles.surfaceDark,
+                    filter === 'all' && styles.filterButtonActive,
+                    darkMode && filter === 'all' && styles.filterButtonActiveDark,
+                  ]}
+                >
+                  <FolderOpen size={14} color={filter === 'all' ? colors.paper : theme.inkSoft} />
+                  <Text style={[styles.filterText, darkMode && styles.textSoftDark, filter === 'all' && styles.filterTextActive]}>All</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityLabel="Show favorites"
+                  onPress={() => setFilter('favorites')}
+                  style={[styles.starFilter, darkMode && styles.surfaceDark, filter === 'favorites' && styles.starFilterActive, darkMode && filter === 'favorites' && styles.starFilterActiveDark]}
+                >
+                  <Star size={16} color={filter === 'favorites' ? colors.mossDark : theme.inkSoft} fill={filter === 'favorites' ? colors.lime : 'transparent'} />
+                </Pressable>
+              </>
+            )}
           </View>
         </View>
 
@@ -368,8 +399,12 @@ export function LibraryScreen({
                 projectName={projects.find((project) => project.id === document.projectId)?.name}
                 darkMode={darkMode}
                 desktop={desktop}
+                selectable={!!isSelectionMode}
+                selected={!!selectedIds?.has(document.id)}
                 onPress={() => onOpen(document)}
                 onMenu={() => onDocumentMenu(document)}
+                onLongPress={() => onEnterSelectionMode?.(document.id)}
+                onToggleSelect={() => onToggleSelect?.(document.id)}
               />
             ))}
           </View>
@@ -390,24 +425,64 @@ export function LibraryScreen({
         <Text style={[styles.localNote, darkMode && styles.textFaintDark]}>Made with ❤️ by Nambi</Text>
       </ScrollView>
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Add Markdown"
-        disabled={isImporting}
-        onPress={() => setAddSheetOpen(true)}
-        style={({ pressed }) => [
-          styles.floatingButton,
-          darkMode && styles.floatingButtonDark,
-          desktop && { right: Math.max(36, (windowWidth - 1180) / 2 + 36) },
-          pressed && styles.floatingButtonPressed,
-        ]}
-      >
-        {isImporting ? (
-          <ActivityIndicator size="small" color={colors.mossDark} />
-        ) : (
-          <Plus size={25} color={colors.mossDark} />
-        )}
-      </Pressable>
+      {isSelectionMode ? (
+        <View
+          style={[
+            styles.bulkBar,
+            darkMode && styles.bulkBarDark,
+            desktop && styles.bulkBarDesktop,
+          ]}
+        >
+          <Text style={[styles.bulkCount, darkMode && styles.textStrongDark]}>{selectedIds?.size ?? 0} selected</Text>
+          <View style={styles.bulkActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Delete selected documents"
+              onPress={onBulkDelete}
+              disabled={!selectedIds?.size}
+              style={({ pressed }) => [styles.bulkDanger, pressed && styles.pressed, !selectedIds?.size && { opacity: 0.6 }]}
+            >
+              <Trash2 size={15} color={colors.paper} />
+              <Text style={styles.bulkDangerText}>Delete</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Move selected to project"
+              onPress={onBulkMove}
+              disabled={!selectedIds?.size}
+              style={({ pressed }) => [styles.bulkButton, darkMode && styles.bulkButtonDark, pressed && styles.pressed]}
+            >
+              <FolderInput size={15} color={darkMode ? darkColors.ink : colors.ink} />
+              <Text style={[styles.bulkButtonText, darkMode && styles.textStrongDark]}>Move</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Export selected Markdown files"
+              onPress={onBulkExport}
+              disabled={!selectedIds?.size || isExporting}
+              style={({ pressed }) => [styles.bulkPrimary, pressed && styles.pressed, (!selectedIds?.size || isExporting) && { opacity: 0.6 }]}
+            >
+              {isExporting ? <ActivityIndicator size="small" color={colors.paper} /> : <Download size={15} color={colors.paper} />}
+              <Text style={styles.bulkPrimaryText}>{isExporting ? 'Exporting…' : `Export ${selectedIds?.size ?? 0}`}</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Add Markdown"
+          disabled={isImporting}
+          onPress={() => setAddSheetOpen(true)}
+          style={({ pressed }) => [
+            styles.floatingButton,
+            darkMode && styles.floatingButtonDark,
+            desktop && { right: Math.max(36, (windowWidth - 1180) / 2 + 36) },
+            pressed && styles.floatingButtonPressed,
+          ]}
+        >
+          {isImporting ? <ActivityIndicator size="small" color={colors.mossDark} /> : <Plus size={25} color={colors.mossDark} />}
+        </Pressable>
+      )}
 
       <Modal animationType="slide" transparent visible={addSheetOpen} onRequestClose={() => setAddSheetOpen(false)}>
         <View style={styles.modalRoot}>
@@ -1347,6 +1422,91 @@ const styles = StyleSheet.create({
   projectChipSelectedDark: {
     borderColor: '#688373',
     backgroundColor: darkColors.mossSoft,
+  },
+  bulkBar: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    bottom: 18,
+    minHeight: 62,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 18,
+    backgroundColor: colors.paperStrong,
+    borderWidth: 1,
+    borderColor: colors.line,
+    ...shadow.floating,
+  },
+  bulkBarDark: {
+    backgroundColor: darkColors.paperStrong,
+    borderColor: darkColors.line,
+  },
+  bulkBarDesktop: {
+    left: '50%',
+    right: undefined,
+    width: 560,
+    transform: [{ translateX: -280 }],
+  },
+  bulkCount: {
+    color: colors.ink,
+    fontFamily: fonts.semibold,
+    fontSize: 13,
+  },
+  bulkActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  bulkButton: {
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    borderRadius: radii.pill,
+    backgroundColor: colors.sand,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  bulkButtonDark: {
+    backgroundColor: darkColors.paperStrong,
+    borderColor: darkColors.line,
+  },
+  bulkButtonText: {
+    color: colors.ink,
+    fontFamily: fonts.semibold,
+    fontSize: 11,
+  },
+  bulkPrimary: {
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 16,
+    borderRadius: radii.pill,
+    backgroundColor: colors.moss,
+  },
+  bulkPrimaryText: {
+    color: colors.paper,
+    fontFamily: fonts.semibold,
+    fontSize: 11,
+  },
+  bulkDanger: {
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 14,
+    borderRadius: radii.pill,
+    backgroundColor: colors.error,
+  },
+  bulkDangerText: {
+    color: colors.paper,
+    fontFamily: fonts.semibold,
+    fontSize: 11,
   },
   floatingButtonDark: {
     borderColor: darkColors.canvas,
